@@ -1,0 +1,34 @@
+project_id = "your-project-ref"
+
+[functions.admin-create-game]
+verify_jwt = true
+
+[functions.join-game]
+verify_jwt = true
+
+[functions.start-game]
+verify_jwt = true
+
+[functions.update-player]
+verify_jwt = true
+
+[functions.add-npc]
+verify_jwt = true
+
+[functions.trigger-event]
+verify_jwt = true
+
+[functions.buy-item]
+verify_jwt = true
+
+[functions.sell-item]
+verify_jwt = true
+
+[functions.buy-rumor]
+verify_jwt = true
+
+[functions.place-bid]
+verify_jwt = true
+
+[functions.market-tick]
+verify_jwt = true
