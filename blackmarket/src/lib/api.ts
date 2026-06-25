@@ -12,7 +12,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   HANDLE_TAKEN: "That handle is already taken in this game.",
   INVALID_CODE: "Invalid access code.",
   ADMIN_ONLY: "Admin access required.",
-  NOT_A_PLAYER: "You're not registered in this game yet.",
+  NOT_A_PLAYER: "You're not registered in this room yet.",
   UNKNOWN_ITEM: "Unknown item.",
   UNKNOWN_RUMOR: "Unknown rumor.",
   INVALID_QTY: "Invalid quantity.",
@@ -28,11 +28,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   UNKNOWN_CONTRACT: "Unknown contract.",
 };
 
-function friendlyError(err: unknown): Error {
+function friendlyError(err: unknown): Error & { code?: string } {
   const raw = (err as { message?: string })?.message ?? String(err);
-  // Supabase wraps Postgres RAISE EXCEPTION text, sometimes with extra context appended.
   const code = Object.keys(ERROR_MESSAGES).find((k) => raw.includes(k));
-  return new Error(code ? ERROR_MESSAGES[code] : raw);
+  const out = new Error(code ? ERROR_MESSAGES[code] : raw) as Error & { code?: string };
+  out.code = code;
+  return out;
 }
 
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
@@ -46,6 +47,7 @@ async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
 export const getOrCreateLobby = () => rpc<GameRow>("get_or_create_lobby");
 export const joinGame = (handle: string) => rpc<PlayerRow>("join_game", { p_handle: handle });
 export const adminLogin = (code: string) => rpc<PlayerRow>("admin_login", { p_code: code });
+export const leaveGame = (gameId: string) => rpc<void>("leave_game", { p_game_id: gameId });
 
 // ── Admin actions ────────────────────────────────────────────────────────────
 

@@ -151,10 +151,6 @@ export function useGameConnection() {
   }, [rawMe?.id]);
 
   // ── Presence: who's actually got a live connection right now. ────────────
-  // Each browser tracks itself under a presence key equal to its own player
-  // id; `presenceState()`'s keys are exactly the set of currently-connected
-  // real players. NPCs (no user_id) can't have presence, so they keep
-  // whatever static `online` flag the server gave them.
   useEffect(() => {
     if (!rawMe) return;
     const channel = supabase.channel(`presence:${rawMe.game_id}`, {
@@ -178,9 +174,7 @@ export function useGameConnection() {
   );
   const me = players_.find((p) => p.user_id === myUserId) ?? null;
 
-  // ── Drive the market simulation. Any open client nudges the tick forward;
-  //    the DB-side advisory lock + elapsed-time check keeps it consistent
-  //    even with many tabs open at once. ─────────────────────────────────────
+  // ── Drive the market simulation. ──────────────────────────────────────────
   useEffect(() => {
     if (!ready || !gameIdRef.current || game?.status !== "playing") return;
     const id = gameIdRef.current;
@@ -202,6 +196,14 @@ export function useGameConnection() {
     return p;
   }, []);
 
+  // Actually leaves: deletes your player row server-side first, THEN
+  // reloads — so the reload lands you back on the signup screen instead of
+  // silently reattaching to the same seat (the bug from before this fix).
+  const leaveGame = useCallback(async () => {
+    if (!game) { window.location.reload(); return; }
+    try { await api.leaveGame(game.id); } finally { window.location.reload(); }
+  }, [game?.id]);
+
   const startGame = useCallback(async () => {
     if (!game) return;
     const g = await api.adminStartGame(game.id);
@@ -211,9 +213,6 @@ export function useGameConnection() {
   const resetGame = useCallback(async () => {
     if (!game) return;
     await api.adminResetGame(game.id);
-    // Simplest correct way to pick up the new game_id everywhere (state,
-    // realtime filters, etc.) is to just reload — the admin's player row
-    // in the new lobby was already created server-side by admin_reset_game.
     window.location.reload();
   }, [game?.id]);
 
@@ -292,7 +291,7 @@ export function useGameConnection() {
   return {
     ready, error,
     game, players: players_, marketItems, rumors, purchasedRumorIds, events, auction, inventory, contracts, me,
-    join, adminLogin, startGame, resetGame, addNpc, updatePlayerObjective, removePlayer,
+    join, adminLogin, leaveGame, startGame, resetGame, addNpc, updatePlayerObjective, removePlayer,
     autoAssignObjectives, triggerEvent, buy, sell, buyRumor, bid,
     acceptContract, cancelContract, completeContract,
   };

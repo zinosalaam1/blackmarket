@@ -99,6 +99,8 @@ function LoadingScreen({ label }: { label: string }) {
 
 // ─── Signup Screen ────────────────────────────────────────────────────────────
 
+// ─── Signup Screen ────────────────────────────────────────────────────────────
+
 function SignupScreen({
   onJoin, onAdminLogin,
 }: { onJoin: (handle: string) => Promise<void>; onAdminLogin: (code: string) => Promise<void> }) {
@@ -214,7 +216,7 @@ function LobbyScreen({ handle, players, onLeave }: { handle: string; players: Pl
             {players.map((p) => (
               <div key={p.id} className="flex items-center justify-between px-4 py-2.5">
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#00e676] animate-pulse" />
+                  <div className={`w-1.5 h-1.5 rounded-full ${p.online ? "bg-[#00e676] animate-pulse" : "bg-[#2a3444]"}`} />
                   <span className="font-mono text-[12px] font-bold text-[#d8d0c4]">{p.handle}</span>
                   {p.is_admin && <span className="font-mono text-[8px] border border-[#ff3333]/40 text-[#ff3333] px-1">ADMIN</span>}
                   {p.handle === handle && <span className="font-mono text-[8px] border border-[#f0a500]/40 text-[#f0a500] px-1">YOU</span>}
@@ -901,8 +903,8 @@ export default function App() {
   }
 
   if (game.status === "lobby") {
-    return <LobbyScreen handle={me.handle} players={conn.players} onLeave={() => window.location.reload()} />;
+    return <LobbyScreen handle={me.handle} players={conn.players} onLeave={conn.leaveGame} />;
   }
 
-  return <Game conn={conn} onLogout={() => window.location.reload()} />;
+  return <Game conn={conn} onLogout={conn.leaveGame} />;
 }
