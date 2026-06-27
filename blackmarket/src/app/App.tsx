@@ -101,35 +101,31 @@ function LoadingScreen({ label }: { label: string }) {
 
 // ─── Signup Screen ────────────────────────────────────────────────────────────
 
-function SignupScreen({
-  onJoin, onAdminLogin,
-}: { onJoin: (handle: string) => Promise<void>; onAdminLogin: (code: string) => Promise<void> }) {
-  const [handle, setHandle] = useState("");
-  const [adminCode, setAdminCode] = useState("");
-  const [mode, setMode] = useState<"player" | "admin">("player");
-  const [error, setError] = useState("");
-  const [adminError, setAdminError] = useState("");
-  const [busy, setBusy] = useState(false);
+function formatCode(code: string) {
+  return code.length === 6 ? `${code.slice(0, 3)}-${code.slice(3)}` : code;
+}
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    try { await onJoin(handle); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+function CopyLink({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  const link = `${window.location.origin}${window.location.pathname}?room=${code}`;
+  async function copy() {
+    try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); }
+    catch { /* clipboard unavailable — code is still shown for manual sharing */ }
   }
+  return (
+    <button onClick={copy} className="flex items-center gap-1.5 font-mono text-[9px] tracking-widest text-[#06b6d4] border border-[#06b6d4]/30 px-2.5 py-1.5 hover:bg-[#06b6d4]/10 transition-colors">
+      {copied ? "✓ COPIED" : "COPY INVITE LINK"}
+    </button>
+  );
+}
 
-  async function handleAdminSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    try { await onAdminLogin(adminCode); } catch (err) { setAdminError((err as Error).message); } finally { setBusy(false); }
-  }
-
+function AuthShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="size-full flex flex-col items-center justify-center bg-background relative overflow-hidden" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
       <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{
         backgroundImage: "linear-gradient(#f0a500 1px, transparent 1px), linear-gradient(90deg, #f0a500 1px, transparent 1px)", backgroundSize: "40px 40px",
       }} />
       <div className="absolute inset-0 pointer-events-none" style={{ background: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px)" }} />
-
       <div className="relative z-10 w-full max-w-md px-6">
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 mb-3">
@@ -139,72 +135,203 @@ function SignupScreen({
           <h1 className="text-[48px] font-black tracking-[-0.01em] leading-none text-[#f0a500]" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>THE BLACK MARKET</h1>
           <p className="font-mono text-[11px] text-[#5c6878] mt-2 tracking-widest">UNDERGROUND TRADING · HIDDEN AGENDAS · NOBODY CAN BE TRUSTED</p>
         </div>
-
-        <div className="flex border border-border mb-6">
-          <button onClick={() => setMode("player")} className={`flex-1 py-2.5 font-mono text-[10px] tracking-widest transition-colors ${mode === "player" ? "bg-[#f0a500]/10 text-[#f0a500] border-r border-[#f0a500]/20" : "text-[#5c6878] border-r border-border hover:text-[#d8d0c4]"}`}>
-            <UserPlus size={10} className="inline mr-1.5" />PLAYER SIGNUP
-          </button>
-          <button onClick={() => setMode("admin")} className={`flex-1 py-2.5 font-mono text-[10px] tracking-widest transition-colors ${mode === "admin" ? "bg-[#ff3333]/10 text-[#ff3333]" : "text-[#5c6878] hover:text-[#d8d0c4]"}`}>
-            <Settings size={10} className="inline mr-1.5" />ADMIN ACCESS
-          </button>
-        </div>
-
-        {mode === "player" ? (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] block mb-2">CHOOSE YOUR HANDLE</label>
-              <input type="text" value={handle} onChange={(e) => { setHandle(e.target.value); setError(""); }}
-                placeholder="e.g. SHADOW_DEALER" maxLength={16} autoFocus
-                className="w-full bg-[#0d1117] border border-border text-[#d8d0c4] font-mono text-[14px] px-4 py-3 focus:outline-none focus:border-[#f0a500]/60 placeholder-[#2a3444] tracking-wider" />
-              {error && <p className="font-mono text-[10px] text-[#ff3333] mt-1.5">{error}</p>}
-            </div>
-            <div className="bg-[#0d1117] border border-border p-3">
-              <div className="font-mono text-[9px] text-[#5c6878] tracking-widest mb-2">YOU WILL RECEIVE</div>
-              <div className="grid grid-cols-2 gap-2">
-                {["₦10,000 Starting Cash", "Secret Objective Card", "Basic Inventory", "Reputation Score"].map((item) => (
-                  <div key={item} className="flex items-center gap-1.5 font-mono text-[10px] text-[#d8d0c4]"><span className="text-[#00e676]">✓</span> {item}</div>
-                ))}
-              </div>
-            </div>
-            <button type="submit" disabled={busy} className="w-full py-3.5 bg-[#f0a500] text-black font-black text-[14px] tracking-[0.2em] hover:bg-[#f0b800] transition-colors disabled:opacity-50" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-              {busy ? "CONNECTING..." : "ENTER THE MARKET"}
-            </button>
-            <p className="font-mono text-[9px] text-[#2a3444] text-center tracking-widest">GAME STARTS WHEN THE ADMIN OPENS THE MARKET</p>
-          </form>
-        ) : (
-          <form onSubmit={handleAdminSubmit} className="space-y-4">
-            <div>
-              <label className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] block mb-2">ADMIN ACCESS CODE</label>
-              <input type="password" value={adminCode} onChange={(e) => { setAdminCode(e.target.value); setAdminError(""); }}
-                placeholder="••••••••••••" autoFocus
-                className="w-full bg-[#0d1117] border border-border text-[#d8d0c4] font-mono text-[14px] px-4 py-3 focus:outline-none focus:border-[#ff3333]/60 placeholder-[#2a3444] tracking-[0.3em]" />
-              {adminError && <p className="font-mono text-[10px] text-[#ff3333] mt-1.5">{adminError}</p>}
-            </div>
-            <button type="submit" disabled={busy} className="w-full py-3.5 bg-[#ff3333]/10 border border-[#ff3333]/40 text-[#ff3333] font-black text-[13px] tracking-[0.2em] hover:bg-[#ff3333]/20 transition-colors disabled:opacity-50" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-              {busy ? "VERIFYING..." : "ACCESS ADMIN PANEL"}
-            </button>
-          </form>
-        )}
+        {children}
       </div>
     </div>
   );
 }
 
+// ─── Auth: sign up / log in ─────────────────────────────────────────────────────
+
+function AuthScreen({
+  onSignUp, onSignIn,
+}: { onSignUp: (email: string, password: string) => Promise<boolean>; onSignIn: (email: string, password: string) => Promise<void> }) {
+  const [mode, setMode] = useState<"signup" | "login">("signup");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [checkEmail, setCheckEmail] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      if (mode === "signup") {
+        const loggedIn = await onSignUp(email, password);
+        if (!loggedIn) setCheckEmail(true);
+      } else {
+        await onSignIn(email, password);
+      }
+    } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  }
+
+  if (checkEmail) {
+    return (
+      <AuthShell>
+        <div className="text-center font-mono text-[12px] text-[#00e676] border border-[#00e676]/30 bg-[#00e676]/5 p-4">
+          Check your email to confirm your account, then log in.
+        </div>
+      </AuthShell>
+    );
+  }
+
+  return (
+    <AuthShell>
+      <div className="flex border border-border mb-6">
+        <button onClick={() => { setMode("signup"); setError(""); }} className={`flex-1 py-2.5 font-mono text-[10px] tracking-widest transition-colors ${mode === "signup" ? "bg-[#f0a500]/10 text-[#f0a500] border-r border-[#f0a500]/20" : "text-[#5c6878] border-r border-border hover:text-[#d8d0c4]"}`}>
+          <UserPlus size={10} className="inline mr-1.5" />SIGN UP
+        </button>
+        <button onClick={() => { setMode("login"); setError(""); }} className={`flex-1 py-2.5 font-mono text-[10px] tracking-widest transition-colors ${mode === "login" ? "bg-[#06b6d4]/10 text-[#06b6d4]" : "text-[#5c6878] hover:text-[#d8d0c4]"}`}>
+          <Settings size={10} className="inline mr-1.5" />LOG IN
+        </button>
+      </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] block mb-2">EMAIL</label>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus
+            className="w-full bg-[#0d1117] border border-border text-[#d8d0c4] font-mono text-[14px] px-4 py-3 focus:outline-none focus:border-[#f0a500]/60" />
+        </div>
+        <div>
+          <label className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] block mb-2">PASSWORD</label>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6}
+            className="w-full bg-[#0d1117] border border-border text-[#d8d0c4] font-mono text-[14px] px-4 py-3 focus:outline-none focus:border-[#f0a500]/60" />
+          {error && <p className="font-mono text-[10px] text-[#ff3333] mt-1.5">{error}</p>}
+        </div>
+        <button type="submit" disabled={busy} className="w-full py-3.5 bg-[#f0a500] text-black font-black text-[14px] tracking-[0.2em] hover:bg-[#f0b800] transition-colors disabled:opacity-50" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+          {busy ? "..." : mode === "signup" ? "CREATE ACCOUNT" : "LOG IN"}
+        </button>
+      </form>
+    </AuthShell>
+  );
+}
+
+// ─── Profile setup: choose your permanent handle ────────────────────────────────
+
+function ProfileSetupScreen({ onComplete }: { onComplete: (handle: string) => Promise<void> }) {
+  const [handle, setHandle] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try { await onComplete(handle); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  }
+
+  return (
+    <AuthShell>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] block mb-2">CHOOSE YOUR HANDLE</label>
+          <input type="text" value={handle} onChange={(e) => { setHandle(e.target.value); setError(""); }}
+            placeholder="e.g. SHADOW_DEALER" maxLength={16} autoFocus
+            className="w-full bg-[#0d1117] border border-border text-[#d8d0c4] font-mono text-[14px] px-4 py-3 focus:outline-none focus:border-[#f0a500]/60 placeholder-[#2a3444] tracking-wider" />
+          {error && <p className="font-mono text-[10px] text-[#ff3333] mt-1.5">{error}</p>}
+        </div>
+        <p className="font-mono text-[9px] text-[#2a3444] text-center tracking-widest">THIS IS YOUR PERMANENT HANDLE ACROSS EVERY ROOM</p>
+        <button type="submit" disabled={busy} className="w-full py-3.5 bg-[#f0a500] text-black font-black text-[14px] tracking-[0.2em] hover:bg-[#f0b800] transition-colors disabled:opacity-50" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+          {busy ? "SAVING..." : "CONTINUE"}
+        </button>
+      </form>
+    </AuthShell>
+  );
+}
+
+// ─── Room Gate: host a new game or join one by code ────────────────────────────
+
+function RoomGate({
+  prefillCode, onHost, onJoin, onSignOut,
+}: { prefillCode: string | null; onHost: () => Promise<void>; onJoin: (code: string) => Promise<void>; onSignOut: () => Promise<void> }) {
+  const [mode, setMode] = useState<"join" | "host">(prefillCode ? "join" : "host");
+  const [code, setCode] = useState(prefillCode ?? "");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function handleHost() {
+    setBusy(true);
+    setError("");
+    try { await onHost(); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  }
+
+  async function handleJoin(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try { await onJoin(code); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  }
+
+  return (
+    <AuthShell>
+      <div className="flex border border-border mb-6">
+        <button onClick={() => { setMode("join"); setError(""); }} className={`flex-1 py-2.5 font-mono text-[10px] tracking-widest transition-colors ${mode === "join" ? "bg-[#f0a500]/10 text-[#f0a500] border-r border-[#f0a500]/20" : "text-[#5c6878] border-r border-border hover:text-[#d8d0c4]"}`}>
+          <UserPlus size={10} className="inline mr-1.5" />JOIN WITH CODE
+        </button>
+        <button onClick={() => { setMode("host"); setError(""); }} className={`flex-1 py-2.5 font-mono text-[10px] tracking-widest transition-colors ${mode === "host" ? "bg-[#ff3333]/10 text-[#ff3333]" : "text-[#5c6878] hover:text-[#d8d0c4]"}`}>
+          <Settings size={10} className="inline mr-1.5" />HOST A NEW GAME
+        </button>
+      </div>
+
+      {mode === "join" ? (
+        <form onSubmit={handleJoin} className="space-y-4">
+          <div>
+            <label className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] block mb-2">ROOM CODE</label>
+            <input type="text" value={code} onChange={(e) => { setCode(e.target.value.toUpperCase()); setError(""); }}
+              placeholder="e.g. AB3-XY9" maxLength={7} autoFocus
+              className="w-full bg-[#0d1117] border border-border text-[#f0a500] font-mono text-[18px] px-4 py-3 focus:outline-none focus:border-[#f0a500]/60 placeholder-[#2a3444] tracking-[0.2em] text-center" />
+            {error && <p className="font-mono text-[10px] text-[#ff3333] mt-1.5">{error}</p>}
+          </div>
+          <button type="submit" disabled={busy} className="w-full py-3.5 bg-[#f0a500] text-black font-black text-[14px] tracking-[0.2em] hover:bg-[#f0b800] transition-colors disabled:opacity-50" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            {busy ? "CONNECTING..." : "ENTER THE MARKET"}
+          </button>
+          <p className="font-mono text-[9px] text-[#2a3444] text-center tracking-widest">ASK YOUR HOST FOR THE ROOM CODE OR INVITE LINK</p>
+        </form>
+      ) : (
+        <div className="space-y-4">
+          <div className="bg-[#0d1117] border border-border p-3">
+            <div className="font-mono text-[9px] text-[#5c6878] tracking-widest mb-2">HOSTING GIVES YOU</div>
+            <div className="grid grid-cols-1 gap-2">
+              {["A fresh, private room with its own code", "Full admin control over events & objectives", "A link you can share with your players"].map((item) => (
+                <div key={item} className="flex items-center gap-1.5 font-mono text-[10px] text-[#d8d0c4]"><span className="text-[#00e676]">✓</span> {item}</div>
+              ))}
+            </div>
+          </div>
+          {error && <p className="font-mono text-[10px] text-[#ff3333]">{error}</p>}
+          <button onClick={handleHost} disabled={busy} className="w-full py-3.5 bg-[#ff3333]/10 border border-[#ff3333]/40 text-[#ff3333] font-black text-[13px] tracking-[0.2em] hover:bg-[#ff3333]/20 transition-colors disabled:opacity-50" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            {busy ? "OPENING ROOM..." : "HOST A NEW GAME"}
+          </button>
+        </div>
+      )}
+
+      <div className="text-center mt-6">
+        <button onClick={onSignOut} className="font-mono text-[9px] tracking-widest text-[#2a3444] hover:text-[#5c6878] transition-colors">SIGN OUT</button>
+      </div>
+    </AuthShell>
+  );
+}
+
 // ─── Lobby Screen ─────────────────────────────────────────────────────────────
 
-function LobbyScreen({ handle, players, onLeave }: { handle: string; players: PlayerRow[]; onLeave: () => void }) {
+function LobbyScreen({ code, handle, players, onLeave }: { code: string; handle: string; players: PlayerRow[]; onLeave: () => void }) {
   const [dots, setDots] = useState(".");
   useEffect(() => { const t = setInterval(() => setDots((d) => (d.length >= 3 ? "." : d + ".")), 600); return () => clearInterval(t); }, []);
 
   return (
     <div className="size-full flex flex-col items-center justify-center bg-background" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
       <div className="w-full max-w-lg px-6">
+        <div className="text-center mb-6">
+          <div className="font-mono text-[10px] tracking-[0.4em] text-[#5c6878] mb-1">ROOM CODE</div>
+          <div className="text-[40px] font-black tracking-[0.1em] text-[#f0a500] leading-none">{formatCode(code)}</div>
+          <div className="flex justify-center mt-2"><CopyLink code={code} /></div>
+        </div>
+
         <div className="text-center mb-8">
           <div className="font-mono text-[10px] tracking-[0.4em] text-[#f0a500] mb-1">CONNECTED AS</div>
           <div className="text-[36px] font-black tracking-wider text-[#d8d0c4]">{handle}</div>
           <div className="flex items-center justify-center gap-2 mt-3">
             <div className="w-2 h-2 rounded-full bg-[#f0a500] animate-pulse" />
-            <span className="font-mono text-[11px] text-[#5c6878] tracking-widest">WAITING FOR ADMIN TO START{dots}</span>
+            <span className="font-mono text-[11px] text-[#5c6878] tracking-widest">WAITING FOR HOST TO START{dots}</span>
           </div>
         </div>
 
@@ -218,7 +345,7 @@ function LobbyScreen({ handle, players, onLeave }: { handle: string; players: Pl
                 <div className="flex items-center gap-2">
                   <div className={`w-1.5 h-1.5 rounded-full ${p.online ? "bg-[#00e676] animate-pulse" : "bg-[#2a3444]"}`} />
                   <span className="font-mono text-[12px] font-bold text-[#d8d0c4]">{p.handle}</span>
-                  {p.is_admin && <span className="font-mono text-[8px] border border-[#ff3333]/40 text-[#ff3333] px-1">ADMIN</span>}
+                  {p.is_admin && <span className="font-mono text-[8px] border border-[#ff3333]/40 text-[#ff3333] px-1">HOST</span>}
                   {p.handle === handle && <span className="font-mono text-[8px] border border-[#f0a500]/40 text-[#f0a500] px-1">YOU</span>}
                 </div>
                 <span className="font-mono text-[9px] text-[#2a3444]">
@@ -231,7 +358,7 @@ function LobbyScreen({ handle, players, onLeave }: { handle: string; players: Pl
 
         <div className="mt-4 text-center">
           <p className="font-mono text-[10px] text-[#2a3444] tracking-widest mb-3">YOUR SECRET OBJECTIVE WILL BE REVEALED WHEN THE GAME STARTS</p>
-          <button onClick={onLeave} className="font-mono text-[10px] tracking-widest text-[#5c6878] border border-[#2a3444] px-4 py-2 hover:text-[#d8d0c4] hover:border-[#5c6878] transition-colors">LEAVE LOBBY</button>
+          <button onClick={onLeave} className="font-mono text-[10px] tracking-widest text-[#5c6878] border border-[#2a3444] px-4 py-2 hover:text-[#d8d0c4] hover:border-[#5c6878] transition-colors">LEAVE ROOM</button>
         </div>
       </div>
     </div>
@@ -243,8 +370,9 @@ function LobbyScreen({ handle, players, onLeave }: { handle: string; players: Pl
 type AdminTab = "ROSTER" | "OBJECTIVES" | "EVENTS" | "OVERVIEW";
 
 function AdminPanel({
-  registeredPlayers, onUpdatePlayerObjective, onRemovePlayer, onStartGame, onResetGame, onTriggerEvent, onAddNpc, onAutoAssign, gameStatus,
+  code, registeredPlayers, onUpdatePlayerObjective, onRemovePlayer, onStartGame, onResetGame, onTriggerEvent, onAddNpc, onAutoAssign, gameStatus,
 }: {
+  code: string;
   registeredPlayers: PlayerRow[];
   onUpdatePlayerObjective: (id: string, objectiveId: string) => void;
   onRemovePlayer: (id: string) => void;
@@ -274,7 +402,11 @@ function AdminPanel({
           <div className="w-2 h-2 rounded-full bg-[#ff3333] animate-pulse" />
           <span className="font-bold text-[14px] tracking-[0.2em] text-[#ff3333]">ADMIN PANEL</span>
         </div>
-        <span className="font-mono text-[10px] text-[#5c6878] border border-[#ff3333]/20 px-2 py-0.5 tracking-widest">THE BLACK MARKET</span>
+        <div className="flex items-center gap-1.5 border border-[#f0a500]/30 px-2 py-1">
+          <span className="font-mono text-[9px] text-[#5c6878]">ROOM</span>
+          <span className="font-mono text-[13px] font-bold text-[#f0a500] tracking-[0.15em]">{formatCode(code)}</span>
+        </div>
+        <CopyLink code={code} />
         <div className="flex-1" />
         <div className="flex items-center gap-2 font-mono text-[10px] text-[#5c6878]">
           <span>{registeredPlayers.length} PLAYERS</span><span className="text-[#2a3444]">·</span>
@@ -564,6 +696,7 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
         <button onClick={() => setShowObjective((v) => !v)} className="flex items-center gap-1.5 px-3 py-2.5 border-l border-border text-[#5c6878] hover:text-[#f0a500] transition-colors">
           {showObjective ? <EyeOff size={12} /> : <Eye size={12} />}<span className="font-mono text-[9px] tracking-widest" style={{ color: objective.color }}>{objective.role}</span>
         </button>
+        <div className="px-3 py-2.5 border-l border-border shrink-0"><div className="font-mono text-[9px] text-[#5c6878] tracking-widest">ROOM</div><div className="font-mono text-[11px] font-bold text-[#5c6878] tracking-[0.15em]">{formatCode(game.code)}</div></div>
         <div className="px-4 py-2.5 border-l border-border shrink-0"><div className="font-mono text-[9px] text-[#5c6878] tracking-widest">OPERATOR</div><div className="font-mono text-[11px] font-bold text-[#d8d0c4]">{me.handle}</div></div>
         <button onClick={onLogout} className="px-3 py-2.5 border-l border-border font-mono text-[9px] text-[#5c6878] hover:text-[#ff3333] transition-colors tracking-widest">EXIT</button>
       </header>
@@ -862,7 +995,7 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
 
 export default function App() {
   const conn = useGameConnection();
-  const { ready, error, game, me } = conn;
+  const { authReady, session, profile, error, game, me, prefillCode } = conn;
 
   if (error) {
     return (
@@ -875,13 +1008,23 @@ export default function App() {
     );
   }
 
-  if (!ready || !game) return <LoadingScreen label="CONNECTING TO THE BLACK MARKET..." />;
+  if (!authReady) return <LoadingScreen label="CONNECTING TO THE BLACK MARKET..." />;
 
-  if (!me) {
+  if (!session) {
+    return <AuthScreen onSignUp={conn.signUp} onSignIn={conn.signIn} />;
+  }
+
+  if (!profile) {
+    return <ProfileSetupScreen onComplete={conn.completeProfile} />;
+  }
+
+  if (!game || !me) {
     return (
-      <SignupScreen
-        onJoin={async (handle) => { await conn.join(handle); }}
-        onAdminLogin={async (code) => { await conn.adminLogin(code); }}
+      <RoomGate
+        prefillCode={prefillCode}
+        onHost={async () => { await conn.hostRoom(); }}
+        onJoin={async (code) => { await conn.enterRoom(code); }}
+        onSignOut={conn.signOut}
       />
     );
   }
@@ -889,6 +1032,7 @@ export default function App() {
   if (me.is_admin) {
     return (
       <AdminPanel
+        code={game.code}
         registeredPlayers={conn.players}
         onUpdatePlayerObjective={conn.updatePlayerObjective}
         onRemovePlayer={conn.removePlayer}
@@ -903,7 +1047,7 @@ export default function App() {
   }
 
   if (game.status === "lobby") {
-    return <LobbyScreen handle={me.handle} players={conn.players} onLeave={conn.leaveGame} />;
+    return <LobbyScreen code={game.code} handle={me.handle} players={conn.players} onLeave={conn.leaveGame} />;
   }
 
   return <Game conn={conn} onLogout={conn.leaveGame} />;

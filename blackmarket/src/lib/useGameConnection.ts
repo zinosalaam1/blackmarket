@@ -1,22 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { supabase, ensureAnonSession } from "./supabase";
+import { supabase } from "./supabase";
 import * as api from "./api";
 import type {
-  AuctionRow, ContractRow, EventRow, GameRow, InventoryRow, MarketItemRow, PlayerRow, RumorRow,
+  AuctionRow, ContractRow, EventRow, GameRow, InventoryRow, MarketItemRow, PlayerRow, ProfileRow, RumorRow,
 } from "./types";
 
+const ROOM_CODE_KEY = "bm_room_code";
+
 /**
- * Single hook that owns the live connection to the Supabase backend:
- * - bootstraps an anonymous auth session
- * - loads/creates the shared lobby
- * - subscribes to Realtime changes for every table the game needs
- * - tracks live presence so "online" reflects who's actually connected
- * - drives the market simulation by calling market_tick() every ~2s
- * - exposes thin wrappers around every server-authoritative RPC
+ * Owns the live connection to the Supabase backend in three layers:
+ *  1. Auth — a real Supabase session (email+password). No session => show
+ *     the sign-up/log-in screen, full stop.
+ *  2. Profile — your permanent handle, tied to your account. No profile
+ *     row yet => show the "choose your handle" screen.
+ *  3. Room — once authed with a profile, host a room or join one by code.
+ *     The current room's code is remembered (URL ?room=CODE and
+ *     localStorage) so reloading silently reattaches you.
  */
 export function useGameConnection() {
-  const [ready, setReady] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+  const [session, setSession] = useState<{ userId: string } | null>(null);
+  const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [prefillCode, setPrefillCode] = useState<string | null>(null);
 
   const [game, setGame] = useState<GameRow | null>(null);
   const [players, setPlayers] = useState<PlayerRow[]>([]);
@@ -27,67 +33,91 @@ export function useGameConnection() {
   const [auction, setAuction] = useState<AuctionRow | null>(null);
   const [inventory, setInventory] = useState<InventoryRow[]>([]);
   const [contracts, setContracts] = useState<ContractRow[]>([]);
-  const [myUserId, setMyUserId] = useState<string | null>(null);
   const [onlinePlayerIds, setOnlinePlayerIds] = useState<Set<string>>(new Set());
 
   const gameIdRef = useRef<string | null>(null);
 
-  const rawMe = players.find((p) => p.user_id === myUserId) ?? null;
+  const rawMe = players.find((p) => p.user_id === session?.userId) ?? null;
 
-  // ── Bootstrap: anon auth + load/create lobby + initial reads ─────────────
+  const loadRoom = useCallback(async (gameId: string) => {
+    gameIdRef.current = gameId;
+    const [g, pl, mkt, rum, ev, au, ct] = await Promise.all([
+      api.fetchGame(gameId),
+      api.fetchPlayers(gameId),
+      api.fetchMarketItems(gameId),
+      api.fetchRumors(gameId),
+      api.fetchEvents(gameId),
+      api.fetchActiveAuction(gameId),
+      api.fetchContracts(gameId),
+    ]);
+    setGame(g);
+    setPlayers(pl);
+    setMarketItems(mkt);
+    setRumors(rum);
+    setEvents(ev);
+    setAuction(au);
+    setContracts(ct);
+  }, []);
+
+  // ── 1) Auth bootstrap + keep session in sync ──────────────────────────────
   useEffect(() => {
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return;
+      setSession(data.session ? { userId: data.session.user.id } : null);
+      setAuthReady(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+      setSession(sess ? { userId: sess.user.id } : null);
+      if (!sess) {
+        // Signed out — clear all room state.
+        setProfile(null);
+        setGame(null);
+        setPlayers([]);
+        gameIdRef.current = null;
+        localStorage.removeItem(ROOM_CODE_KEY);
+      }
+    });
+    return () => { cancelled = true; sub.subscription.unsubscribe(); };
+  }, []);
+
+  // ── 2) Profile bootstrap, then try to silently reattach to a remembered
+  //    room (URL ?room=CODE takes priority over localStorage). ─────────────
+  useEffect(() => {
+    if (!authReady || !session) return;
     let cancelled = false;
     (async () => {
       try {
-        const session = await ensureAnonSession();
+        const p = await api.fetchMyProfile();
         if (cancelled) return;
-        setMyUserId(session?.user.id ?? null);
+        setProfile(p);
+        if (!p) return; // landing on the "choose a handle" screen next
 
-        const g = await api.getOrCreateLobby();
-        if (cancelled) return;
-        gameIdRef.current = g.id;
-        setGame(g);
+        const urlCode = new URLSearchParams(window.location.search).get("room");
+        const storedCode = localStorage.getItem(ROOM_CODE_KEY);
+        const code = (urlCode || storedCode || "").toUpperCase().trim();
+        if (!code) return;
 
-        const [pl, mkt, rum, ev, au, ct] = await Promise.all([
-          api.fetchPlayers(g.id),
-          api.fetchMarketItems(g.id),
-          api.fetchRumors(g.id),
-          api.fetchEvents(g.id),
-          api.fetchActiveAuction(g.id),
-          api.fetchContracts(g.id),
-        ]);
-        if (cancelled) return;
-        setPlayers(pl);
-        setMarketItems(mkt);
-        setRumors(rum);
-        setEvents(ev);
-        setAuction(au);
-        setContracts(ct);
-        setReady(true);
+        setPrefillCode(code);
+        try {
+          const player = await api.joinRoom(code); // silent reattach; needs an existing seat
+          if (cancelled) return;
+          localStorage.setItem(ROOM_CODE_KEY, code);
+          await loadRoom(player.game_id);
+        } catch {
+          // Not in that room — fall through to the room gate.
+        }
       } catch (e) {
         if (!cancelled) setError((e as Error).message);
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [authReady, session?.userId, loadRoom]);
 
-  // ── Once we know who "me" is, load my private rows (inventory, rumors) ──
+  // ── Realtime subscriptions (scoped to the current room) ──────────────────
   useEffect(() => {
-    if (!rawMe) return;
-    (async () => {
-      const [inv, purchased] = await Promise.all([
-        api.fetchInventory(rawMe.id),
-        api.fetchPurchasedRumorIds(rawMe.id),
-      ]);
-      setInventory(inv);
-      setPurchasedRumorIds(purchased);
-    })();
-  }, [rawMe?.id]);
-
-  // ── Realtime subscriptions (public tables) ────────────────────────────────
-  useEffect(() => {
-    if (!ready || !gameIdRef.current) return;
-    const gameId = gameIdRef.current;
+    const gameId = game?.id;
+    if (!gameId) return;
 
     const channel = supabase
       .channel(`game:${gameId}`)
@@ -126,12 +156,20 @@ export function useGameConnection() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [ready]);
+  }, [game?.id]);
 
-  // Inventory/rumor-purchases are private (RLS scoped to `me`), so subscribe
-  // to them separately once we know our player id.
+  // Inventory/rumor-purchases are private (RLS scoped to `me`).
   useEffect(() => {
     if (!rawMe) return;
+    (async () => {
+      const [inv, purchased] = await Promise.all([
+        api.fetchInventory(rawMe.id),
+        api.fetchPurchasedRumorIds(rawMe.id),
+      ]);
+      setInventory(inv);
+      setPurchasedRumorIds(purchased);
+    })();
+
     const channel = supabase
       .channel(`player:${rawMe.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "inventory", filter: `player_id=eq.${rawMe.id}` },
@@ -150,20 +188,17 @@ export function useGameConnection() {
     return () => { supabase.removeChannel(channel); };
   }, [rawMe?.id]);
 
-  // ── Presence: who's actually got a live connection right now. ────────────
+  // ── Presence, scoped per room ──────────────────────────────────────────────
   useEffect(() => {
     if (!rawMe) return;
     const channel = supabase.channel(`presence:${rawMe.game_id}`, {
       config: { presence: { key: rawMe.id } },
     });
     channel.on("presence", { event: "sync" }, () => {
-      const state = channel.presenceState();
-      setOnlinePlayerIds(new Set(Object.keys(state)));
+      setOnlinePlayerIds(new Set(Object.keys(channel.presenceState())));
     });
     channel.subscribe(async (status) => {
-      if (status === "SUBSCRIBED") {
-        await channel.track({ online_at: new Date().toISOString() });
-      }
+      if (status === "SUBSCRIBED") await channel.track({ online_at: new Date().toISOString() });
     });
     return () => { supabase.removeChannel(channel); };
   }, [rawMe?.id, rawMe?.game_id]);
@@ -172,48 +207,76 @@ export function useGameConnection() {
     () => players.map((p) => ({ ...p, online: p.is_npc ? p.online : onlinePlayerIds.has(p.id) })),
     [players, onlinePlayerIds]
   );
-  const me = players_.find((p) => p.user_id === myUserId) ?? null;
+  const me = players_.find((p) => p.user_id === session?.userId) ?? null;
 
-  // ── Drive the market simulation. ──────────────────────────────────────────
+  // ── Drive the market simulation for the current room. ─────────────────────
   useEffect(() => {
-    if (!ready || !gameIdRef.current || game?.status !== "playing") return;
-    const id = gameIdRef.current;
+    if (game?.status !== "playing") return;
+    const id = game.id;
     const t = setInterval(() => { api.marketTick(id).catch(() => {}); }, 2000);
     return () => clearInterval(t);
-  }, [ready, game?.status]);
+  }, [game?.id, game?.status]);
 
-  // ── Actions ──────────────────────────────────────────────────────────────
+  // ── Auth actions ─────────────────────────────────────────────────────────
 
-  const join = useCallback(async (handle: string) => {
-    const p = await api.joinGame(handle);
-    setPlayers((prev) => (prev.some((x) => x.id === p.id) ? prev.map((x) => (x.id === p.id ? p : x)) : [...prev, p]));
+  const signUp = useCallback(async (email: string, password: string) => {
+    const data = await api.signUp(email, password);
+    if (data.session) setSession({ userId: data.session.user.id });
+    return !!data.session; // false => email confirmation required before login works
+  }, []);
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    const data = await api.signIn(email, password);
+    if (data.session) setSession({ userId: data.session.user.id });
+  }, []);
+
+  const signOut = useCallback(async () => {
+    await api.signOut();
+  }, []);
+
+  const completeProfile = useCallback(async (handle: string) => {
+    const p = await api.createProfile(handle);
+    setProfile(p);
     return p;
   }, []);
 
-  const adminLogin = useCallback(async (code: string) => {
-    const p = await api.adminLogin(code);
-    setPlayers((prev) => (prev.some((x) => x.id === p.id) ? prev.map((x) => (x.id === p.id ? p : x)) : [...prev, p]));
-    return p;
-  }, []);
+  // ── Room actions ─────────────────────────────────────────────────────────
 
-  // Actually leaves: deletes your player row server-side first, THEN
-  // reloads — so the reload lands you back on the signup screen instead of
-  // silently reattaching to the same seat (the bug from before this fix).
+  const hostRoom = useCallback(async () => {
+    const g = await api.createRoom();
+    localStorage.setItem(ROOM_CODE_KEY, g.code);
+    await loadRoom(g.id);
+    return g;
+  }, [loadRoom]);
+
+  const enterRoom = useCallback(async (code: string) => {
+    const p = await api.joinRoom(code);
+    localStorage.setItem(ROOM_CODE_KEY, code.toUpperCase().trim());
+    await loadRoom(p.game_id);
+    return p;
+  }, [loadRoom]);
+
   const leaveGame = useCallback(async () => {
-    if (!game) { window.location.reload(); return; }
-    try { await api.leaveGame(game.id); } finally { window.location.reload(); }
+    if (!game) return;
+    try { await api.leaveGame(game.id); } finally {
+      localStorage.removeItem(ROOM_CODE_KEY);
+      window.location.href = window.location.pathname;
+    }
   }, [game?.id]);
+
+  const resetGame = useCallback(async () => {
+    if (!game) return;
+    const g = await api.adminResetGame(game.id);
+    localStorage.setItem(ROOM_CODE_KEY, g.code);
+    window.location.href = window.location.pathname;
+  }, [game?.id]);
+
+  // ── Admin / gameplay actions ──────────────────────────────────────────────
 
   const startGame = useCallback(async () => {
     if (!game) return;
     const g = await api.adminStartGame(game.id);
     setGame(g);
-  }, [game?.id]);
-
-  const resetGame = useCallback(async () => {
-    if (!game) return;
-    await api.adminResetGame(game.id);
-    window.location.reload();
   }, [game?.id]);
 
   const addNpc = useCallback(async () => {
@@ -289,9 +352,11 @@ export function useGameConnection() {
   }, []);
 
   return {
-    ready, error,
+    authReady, session, profile, error, prefillCode,
     game, players: players_, marketItems, rumors, purchasedRumorIds, events, auction, inventory, contracts, me,
-    join, adminLogin, leaveGame, startGame, resetGame, addNpc, updatePlayerObjective, removePlayer,
+    signUp, signIn, signOut, completeProfile,
+    hostRoom, enterRoom, leaveGame, resetGame,
+    startGame, addNpc, updatePlayerObjective, removePlayer,
     autoAssignObjectives, triggerEvent, buy, sell, buyRumor, bid,
     acceptContract, cancelContract, completeContract,
   };

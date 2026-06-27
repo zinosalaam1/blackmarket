@@ -1,16 +1,18 @@
 import { supabase } from "./supabase";
 import type {
-  AuctionRow, ContractRow, EventRow, GameRow, InventoryRow, MarketItemRow, PlayerRow, RumorRow,
+  AuctionRow, ContractRow, EventRow, GameRow, InventoryRow, MarketItemRow, PlayerRow, ProfileRow, RumorRow,
 } from "./types";
 
 // Friendly error messages for the exceptions raised by the RPC functions in
 // supabase/migrations/0001_init.sql. Anything not in this map falls back to
 // a generic message.
 const ERROR_MESSAGES: Record<string, string> = {
-  NOT_AUTHENTICATED: "You're not signed in yet — refresh the page and try again.",
+  NOT_AUTHENTICATED: "You're not signed in — log in and try again.",
   INVALID_HANDLE: "Handle must be 3-16 characters: letters, numbers, underscores only.",
-  HANDLE_TAKEN: "That handle is already taken in this game.",
-  INVALID_CODE: "Invalid access code.",
+  HANDLE_TAKEN: "That handle is already taken.",
+  PROFILE_REQUIRED: "Finish setting up your profile first.",
+  ROOM_NOT_FOUND: "No active room with that code. Double-check it, or host a new game.",
+  CODE_GEN_FAILED: "Couldn't generate a room code — try again in a moment.",
   ADMIN_ONLY: "Admin access required.",
   NOT_A_PLAYER: "You're not registered in this room yet.",
   UNKNOWN_ITEM: "Unknown item.",
@@ -44,9 +46,37 @@ async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
 
 // ── Lobby / session ─────────────────────────────────────────────────────────
 
-export const getOrCreateLobby = () => rpc<GameRow>("get_or_create_lobby");
-export const joinGame = (handle: string) => rpc<PlayerRow>("join_game", { p_handle: handle });
-export const adminLogin = (code: string) => rpc<PlayerRow>("admin_login", { p_code: code });
+// ── Auth & profile ────────────────────────────────────────────────────────────
+
+export async function signUp(email: string, password: string) {
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  if (error) throw friendlyError(error);
+  return data; // data.session is null if email confirmation is required
+}
+
+export async function signIn(email: string, password: string) {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw friendlyError(error);
+  return data;
+}
+
+export async function signOut() {
+  const { error } = await supabase.auth.signOut();
+  if (error) throw friendlyError(error);
+}
+
+export async function fetchMyProfile() {
+  const { data, error } = await supabase.from("profiles").select("*").maybeSingle();
+  if (error) throw friendlyError(error);
+  return data as ProfileRow | null;
+}
+
+export const createProfile = (handle: string) => rpc<ProfileRow>("create_profile", { p_handle: handle });
+
+// ── Rooms ────────────────────────────────────────────────────────────────────
+
+export const createRoom = () => rpc<GameRow>("create_room");
+export const joinRoom = (code: string) => rpc<PlayerRow>("join_room", { p_code: code });
 export const leaveGame = (gameId: string) => rpc<void>("leave_game", { p_game_id: gameId });
 
 // ── Admin actions ────────────────────────────────────────────────────────────

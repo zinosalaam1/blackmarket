@@ -16,18 +16,3 @@ export const supabase = createClient(url, anonKey, {
     autoRefreshToken: true,
   },
 });
-
-/**
- * Ensures the browser has an anonymous Supabase auth session.
- * This is what gives every visitor a stable user_id (persisted in
- * localStorage by supabase-js) without requiring sign-up/sign-in.
- * Requires "Anonymous sign-ins" to be enabled in
- * Supabase Dashboard -> Authentication -> Providers.
- */
-export async function ensureAnonSession() {
-  const { data } = await supabase.auth.getSession();
-  if (data.session) return data.session;
-  const { data: signInData, error } = await supabase.auth.signInAnonymously();
-  if (error) throw error;
-  return signInData.session;
-}

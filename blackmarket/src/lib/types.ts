@@ -5,6 +5,7 @@ export type GamePhase = "OPEN" | "FINAL PHASE" | "COLLAPSE";
 
 export interface GameRow {
   id: string;
+  code: string;
   status: GameStatus;
   phase: GamePhase;
   duration_seconds: number;
@@ -78,6 +79,12 @@ export interface AuctionRow {
   bid_count: number;
   ends_at: string;
   settled: boolean;
+  created_at: string;
+}
+
+export interface ProfileRow {
+  user_id: string;
+  handle: string;
   created_at: string;
 }
 
