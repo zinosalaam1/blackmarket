@@ -313,7 +313,7 @@ function RoomGate({
 
 // ─── Lobby Screen ─────────────────────────────────────────────────────────────
 
-function LobbyScreen({ code, handle, players, onLeave }: { code: string; handle: string; players: PlayerRow[]; onLeave: () => void }) {
+function LobbyScreen({ code, handle, players, onLeave, onSignOut }: { code: string; handle: string; players: PlayerRow[]; onLeave: () => void; onSignOut: () => Promise<void> }) {
   const [dots, setDots] = useState(".");
   useEffect(() => { const t = setInterval(() => setDots((d) => (d.length >= 3 ? "." : d + ".")), 600); return () => clearInterval(t); }, []);
 
@@ -358,7 +358,10 @@ function LobbyScreen({ code, handle, players, onLeave }: { code: string; handle:
 
         <div className="mt-4 text-center">
           <p className="font-mono text-[10px] text-[#2a3444] tracking-widest mb-3">YOUR SECRET OBJECTIVE WILL BE REVEALED WHEN THE GAME STARTS</p>
-          <button onClick={onLeave} className="font-mono text-[10px] tracking-widest text-[#5c6878] border border-[#2a3444] px-4 py-2 hover:text-[#d8d0c4] hover:border-[#5c6878] transition-colors">LEAVE ROOM</button>
+          <div className="flex items-center justify-center gap-3">
+            <button onClick={onLeave} className="font-mono text-[10px] tracking-widest text-[#5c6878] border border-[#2a3444] px-4 py-2 hover:text-[#d8d0c4] hover:border-[#5c6878] transition-colors">LEAVE ROOM</button>
+            <button onClick={onSignOut} className="font-mono text-[10px] tracking-widest text-[#2a3444] hover:text-[#ff3333] transition-colors">SIGN OUT</button>
+          </div>
         </div>
       </div>
     </div>
@@ -370,7 +373,7 @@ function LobbyScreen({ code, handle, players, onLeave }: { code: string; handle:
 type AdminTab = "ROSTER" | "OBJECTIVES" | "EVENTS" | "OVERVIEW";
 
 function AdminPanel({
-  code, registeredPlayers, onUpdatePlayerObjective, onRemovePlayer, onStartGame, onResetGame, onTriggerEvent, onAddNpc, onAutoAssign, gameStatus,
+  code, registeredPlayers, onUpdatePlayerObjective, onRemovePlayer, onStartGame, onResetGame, onLeave, onSignOut, onTriggerEvent, onAddNpc, onAutoAssign, gameStatus,
 }: {
   code: string;
   registeredPlayers: PlayerRow[];
@@ -378,6 +381,8 @@ function AdminPanel({
   onRemovePlayer: (id: string) => void;
   onStartGame: () => void;
   onResetGame: () => void;
+  onLeave: () => void;
+  onSignOut: () => Promise<void>;
   onTriggerEvent: (type: string, text: string) => void;
   onAddNpc: () => void;
   onAutoAssign: () => void;
@@ -423,6 +428,8 @@ function AdminPanel({
             <RefreshCw size={10} />NEW GAME
           </button>
         )}
+        <button onClick={onLeave} className="px-3 py-2 border-l border-border font-mono text-[9px] text-[#5c6878] hover:text-[#d8d0c4] transition-colors tracking-widest">LEAVE</button>
+        <button onClick={onSignOut} className="px-3 py-2 border-l border-border font-mono text-[9px] text-[#5c6878] hover:text-[#ff3333] transition-colors tracking-widest">SIGN OUT</button>
       </header>
 
       <div className="flex border-b border-border bg-[#0d1117]">
@@ -699,6 +706,7 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
         <div className="px-3 py-2.5 border-l border-border shrink-0"><div className="font-mono text-[9px] text-[#5c6878] tracking-widest">ROOM</div><div className="font-mono text-[11px] font-bold text-[#5c6878] tracking-[0.15em]">{formatCode(game.code)}</div></div>
         <div className="px-4 py-2.5 border-l border-border shrink-0"><div className="font-mono text-[9px] text-[#5c6878] tracking-widest">OPERATOR</div><div className="font-mono text-[11px] font-bold text-[#d8d0c4]">{me.handle}</div></div>
         <button onClick={onLogout} className="px-3 py-2.5 border-l border-border font-mono text-[9px] text-[#5c6878] hover:text-[#ff3333] transition-colors tracking-widest">EXIT</button>
+        <button onClick={() => conn.signOut()} className="px-3 py-2.5 border-l border-border font-mono text-[9px] text-[#5c6878] hover:text-[#ff3333] transition-colors tracking-widest">SIGN OUT</button>
       </header>
 
       {showObjective && (
@@ -1038,6 +1046,8 @@ export default function App() {
         onRemovePlayer={conn.removePlayer}
         onStartGame={conn.startGame}
         onResetGame={conn.resetGame}
+        onLeave={conn.leaveGame}
+        onSignOut={conn.signOut}
         onTriggerEvent={conn.triggerEvent}
         onAddNpc={conn.addNpc}
         onAutoAssign={conn.autoAssignObjectives}
@@ -1047,7 +1057,7 @@ export default function App() {
   }
 
   if (game.status === "lobby") {
-    return <LobbyScreen code={game.code} handle={me.handle} players={conn.players} onLeave={conn.leaveGame} />;
+    return <LobbyScreen code={game.code} handle={me.handle} players={conn.players} onLeave={conn.leaveGame} onSignOut={conn.signOut} />;
   }
 
   return <Game conn={conn} onLogout={conn.leaveGame} />;
