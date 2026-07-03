@@ -697,10 +697,236 @@ function CustomBroadcast({ onTriggerEvent }: { onTriggerEvent: (type: string, te
 
 // ─── Main Game ────────────────────────────────────────────────────────────────
 
-type Tab = "MARKET" | "INTEL" | "INVENTORY" | "CONTRACTS" | "PLAYERS";
+type Tab = "MARKET" | "INTEL" | "INVENTORY" | "CONTRACTS" | "PLAYERS" | "OPS";
+
+// ─── Ops Tab ─────────────────────────────────────────────────────────────────
+
+function OpsTab({
+  me, players, marketItems, bounties, myLoan, gameId, now,
+  onPlaceBounty, onTargetBlackout, onPumpItem, onTakeLoan, onRepayLoan, onAssassinate,
+}: {
+  me: PlayerRow; players: PlayerRow[]; marketItems: MarketItemRow[];
+  bounties: import("../lib/types").BountyRow[];
+  myLoan: import("../lib/types").LoanRow | null;
+  gameId: string; now: number;
+  onPlaceBounty: (targetId: string, amount: number) => void;
+  onTargetBlackout: (targetId: string) => void;
+  onPumpItem: (itemId: string) => void;
+  onTakeLoan: (amount: number) => void;
+  onRepayLoan: () => void;
+  onAssassinate: (targetId: string) => void;
+}) {
+  const [bountyTarget, setBountyTarget] = useState(players[0]?.id ?? "");
+  const [bountyAmount, setBountyAmount] = useState(2000);
+  const [blackoutTarget, setBlackoutTarget] = useState(players[0]?.id ?? "");
+  const [pumpItemId, setPumpItemId] = useState(marketItems[0]?.id ?? "");
+  const [loanAmount, setLoanAmount] = useState(5000);
+  const [assassinTarget, setAssassinTarget] = useState(players[0]?.id ?? "");
+  const [confirmAssassin, setConfirmAssassin] = useState(false);
+
+  const pumpCost = (id: string) => {
+    const item = marketItems.find((m) => m.id === id);
+    return item ? (item.tier === "legendary" ? 25000 : item.tier === "rare" ? 10000 : 3000) : 0;
+  };
+
+  const loanDueIn = myLoan ? Math.max(0, Math.round((new Date(myLoan.due_at).getTime() - now) / 1000)) : 0;
+
+  const SectionHeader = ({ label, color = "#ff3333" }: { label: string; color?: string }) => (
+    <div className="font-mono text-[9px] tracking-[0.3em] mb-3 pb-2 border-b border-border flex items-center gap-2" style={{ color }}>
+      <div className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
+      {label}
+    </div>
+  );
+
+  const PlayerSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <select value={value} onChange={(e) => onChange(e.target.value)}
+      className="flex-1 bg-[#141b24] border border-border text-[#d8d0c4] font-mono text-[11px] px-2 py-1.5 focus:outline-none focus:border-[#ff3333]/60">
+      {players.map((p) => (
+        <option key={p.id} value={p.id} className="bg-[#141b24]">
+          {p.handle}{p.frozen_until && new Date(p.frozen_until).getTime() > now ? " 🧊" : ""}
+          {bounties.some((b) => b.target_id === p.id && b.status === "active") ? " 🎯" : ""}
+        </option>
+      ))}
+    </select>
+  );
+
+  const OpsBtn = ({ onClick, label, cost, color = "#ff3333", disabled }: { onClick: () => void; label: string; cost?: string; color?: string; disabled?: boolean }) => (
+    <button onClick={onClick} disabled={disabled}
+      className="px-4 py-2 font-mono text-[10px] font-bold tracking-widest border transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+      style={{ color, borderColor: color + "40", background: color + "10" }}
+      onMouseEnter={(e) => !disabled && ((e.target as HTMLElement).style.background = color + "20")}
+      onMouseLeave={(e) => !disabled && ((e.target as HTMLElement).style.background = color + "10")}>
+      {label}{cost ? ` — ${cost}` : ""}
+    </button>
+  );
+
+  if (players.length === 0) {
+    return (
+      <div className="p-4">
+        <div className="border border-dashed border-[#2a3444] p-8 text-center font-mono text-[11px] text-[#5c6878]">
+          NO OTHER OPERATORS IN THIS ROOM
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 space-y-6 max-w-2xl">
+
+      {/* ── Bounties ──────────────────────────────────────────────────────── */}
+      <div>
+        <SectionHeader label="BOUNTIES — PLACE A HIT ON ANOTHER OPERATOR'S HOLDINGS" color="#ef4444" />
+        <div className="bg-[#0d1117] border border-[#ef4444]/20 p-3 mb-3">
+          <div className="font-mono text-[9px] text-[#5c6878] mb-3">PAYING A BOUNTY TRIGGERS 3 HOSTILE MARKET EVENTS ON THEIR INVENTORY OVER 90 SECONDS — MINIMUM ₦2,000</div>
+          <div className="flex gap-2 flex-wrap items-end">
+            <div className="flex-1 min-w-[120px]">
+              <div className="font-mono text-[8px] text-[#5c6878] tracking-widest mb-1">TARGET</div>
+              <PlayerSelect value={bountyTarget} onChange={setBountyTarget} />
+            </div>
+            <div className="w-28">
+              <div className="font-mono text-[8px] text-[#5c6878] tracking-widest mb-1">AMOUNT</div>
+              <input type="number" value={bountyAmount} min={2000} step={500}
+                onChange={(e) => setBountyAmount(parseInt(e.target.value) || 2000)}
+                className="w-full bg-[#141b24] border border-border text-[#d8d0c4] font-mono text-[11px] px-2 py-1.5 focus:outline-none focus:border-[#ef4444]/60" />
+            </div>
+            <OpsBtn label="PLACE BOUNTY" cost={fmt(bountyAmount)} color="#ef4444"
+              disabled={bountyAmount < 2000 || bountyAmount > me.cash}
+              onClick={() => onPlaceBounty(bountyTarget, bountyAmount)} />
+          </div>
+        </div>
+        {bounties.filter((b) => b.status === "active").length > 0 && (
+          <div className="border border-border">
+            <div className="px-3 py-1.5 bg-[#0d1117] border-b border-border font-mono text-[8px] text-[#5c6878] tracking-widest">ACTIVE BOUNTIES</div>
+            {bounties.filter((b) => b.status === "active").map((b) => {
+              const target = players.find((p) => p.id === b.target_id);
+              const placer = [...players, me].find((p) => p.id === b.placer_id);
+              return (
+                <div key={b.id} className="flex items-center justify-between px-3 py-2 border-b border-border last:border-0">
+                  <div className="font-mono text-[10px] text-[#d8d0c4]">🎯 <span className="text-[#ef4444]">{target?.handle ?? "?"}</span> — placed by {placer?.handle ?? "?"}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="font-mono text-[9px] text-[#ef4444]">{b.triggers_remaining} hits left</div>
+                    <div className="font-mono text-[9px] text-[#f0a500]">{fmt(b.amount)}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Pump & Dump ───────────────────────────────────────────────────── */}
+      <div>
+        <SectionHeader label="PUMP & DUMP — SPIKE AN ITEM 60%, THEN IT CRASHES 60% AFTER 60s" color="#8b5cf6" />
+        <div className="bg-[#0d1117] border border-[#8b5cf6]/20 p-3">
+          <div className="font-mono text-[9px] text-[#5c6878] mb-3">BUY BEFORE PUMPING. SELL BEFORE THE DUMP. TIMING IS EVERYTHING.</div>
+          <div className="flex gap-2 flex-wrap items-end">
+            <div className="flex-1 min-w-[140px]">
+              <div className="font-mono text-[8px] text-[#5c6878] tracking-widest mb-1">TARGET ITEM</div>
+              <select value={pumpItemId} onChange={(e) => setPumpItemId(e.target.value)}
+                className="w-full bg-[#141b24] border border-border text-[#d8d0c4] font-mono text-[11px] px-2 py-1.5 focus:outline-none focus:border-[#8b5cf6]/60">
+                {marketItems.map((m) => (
+                  <option key={m.id} value={m.id} className="bg-[#141b24]">
+                    {m.name} — {fmt(m.price)}{m.pump_until && new Date(m.pump_until).getTime() > now ? " [PUMPED]" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="font-mono text-[10px] text-[#8b5cf6] border border-[#8b5cf6]/30 px-3 py-1.5">
+              COST: {fmt(pumpCost(pumpItemId))}
+            </div>
+            <OpsBtn label="PUMP IT" color="#8b5cf6"
+              disabled={pumpCost(pumpItemId) > me.cash || !!(marketItems.find(m=>m.id===pumpItemId)?.pump_until && new Date(marketItems.find(m=>m.id===pumpItemId)!.pump_until!).getTime() > now)}
+              onClick={() => onPumpItem(pumpItemId)} />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Covert Ops ────────────────────────────────────────────────────── */}
+      <div>
+        <SectionHeader label="COVERT OPS — BLIND OR ELIMINATE AN OPERATOR" color="#06b6d4" />
+        <div className="bg-[#0d1117] border border-[#06b6d4]/20 p-3 space-y-3">
+          <div className="mb-2">
+            <div className="font-mono text-[8px] text-[#5c6878] tracking-widest mb-1">TARGET OPERATOR</div>
+            <PlayerSelect value={blackoutTarget} onChange={(v) => { setBlackoutTarget(v); setAssassinTarget(v); }} />
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <div className="flex-1 border border-[#06b6d4]/20 p-3">
+              <div className="font-mono text-[10px] font-bold text-[#06b6d4] mb-1">📡 PERSONAL BLACKOUT</div>
+              <div className="font-mono text-[9px] text-[#5c6878] mb-2">Blinds their price feed for 90 seconds. They trade blind.</div>
+              <OpsBtn label="EXECUTE" cost="₦5,000" color="#06b6d4"
+                disabled={5000 > me.cash}
+                onClick={() => onTargetBlackout(blackoutTarget)} />
+            </div>
+            <div className="flex-1 border border-[#ff3333]/30 p-3">
+              <div className="font-mono text-[10px] font-bold text-[#ff3333] mb-1">☠️ ASSASSINATION</div>
+              <div className="font-mono text-[9px] text-[#5c6878] mb-2">Freezes their entire account for 90s. They cannot trade at all.</div>
+              <div className="font-mono text-[9px] text-[#ff3333] mb-2 tracking-widest">COST: ₦75,000 — NO REFUNDS</div>
+              {!confirmAssassin ? (
+                <OpsBtn label="INITIATE" color="#ff3333"
+                  disabled={75000 > me.cash}
+                  onClick={() => setConfirmAssassin(true)} />
+              ) : (
+                <div className="flex gap-2">
+                  <button onClick={() => { onAssassinate(assassinTarget); setConfirmAssassin(false); }}
+                    className="flex-1 py-1.5 bg-[#ff3333] text-black font-mono text-[9px] font-black tracking-widest hover:bg-[#ff5555] transition-colors">
+                    CONFIRM ☠️
+                  </button>
+                  <button onClick={() => setConfirmAssassin(false)}
+                    className="px-3 py-1.5 border border-border text-[#5c6878] font-mono text-[9px] hover:text-[#d8d0c4] transition-colors">
+                    CANCEL
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Debt Market ───────────────────────────────────────────────────── */}
+      <div>
+        <SectionHeader label="DEBT MARKET — BORROW FAST, PAY 50% INTEREST IN 90 SECONDS" color="#f0a500" />
+        <div className="bg-[#0d1117] border border-[#f0a500]/20 p-3">
+          {myLoan ? (
+            <div>
+              <div className="font-mono text-[9px] text-[#5c6878] tracking-widest mb-3">ACTIVE LOAN</div>
+              <div className="grid grid-cols-3 gap-3 mb-3">
+                <div><div className="font-mono text-[8px] text-[#5c6878]">BORROWED</div><div className="font-mono text-[14px] font-bold text-[#d8d0c4]">{fmt(myLoan.principal)}</div></div>
+                <div><div className="font-mono text-[8px] text-[#5c6878]">NOW OWED</div><div className="font-mono text-[14px] font-bold text-[#ff3333]">{fmt(myLoan.total_owed)}</div></div>
+                <div><div className="font-mono text-[8px] text-[#5c6878]">DUE IN</div><div className={`font-mono text-[14px] font-bold tabular-nums ${loanDueIn < 20 ? "text-[#ff3333] animate-pulse" : "text-[#f0a500]"}`}>{loanDueIn}s</div></div>
+              </div>
+              {loanDueIn === 0 && <div className="font-mono text-[9px] text-[#ff3333] mb-2 animate-pulse">⚠️ OVERDUE — INVENTORY SEIZURE IMMINENT</div>}
+              <OpsBtn label="REPAY NOW" cost={fmt(myLoan.total_owed)} color="#00e676"
+                disabled={myLoan.total_owed > me.cash}
+                onClick={onRepayLoan} />
+            </div>
+          ) : (
+            <div>
+              <div className="font-mono text-[9px] text-[#5c6878] mb-3">BORROW UP TO ₦25,000 — REPAY ×1.5 IN 90 SECONDS OR INVENTORY GETS SEIZED</div>
+              <div className="flex gap-2 flex-wrap items-end">
+                <div className="flex-1">
+                  <div className="font-mono text-[8px] text-[#5c6878] tracking-widest mb-1">AMOUNT (₦1,000 – ₦25,000)</div>
+                  <input type="range" min={1000} max={25000} step={1000} value={loanAmount}
+                    onChange={(e) => setLoanAmount(parseInt(e.target.value))}
+                    className="w-full accent-[#f0a500]" />
+                  <div className="flex justify-between mt-1">
+                    <span className="font-mono text-[9px] text-[#5c6878]">BORROW: {fmt(loanAmount)}</span>
+                    <span className="font-mono text-[9px] text-[#ff3333]">OWE: {fmt(Math.round(loanAmount * 1.5))}</span>
+                  </div>
+                </div>
+                <OpsBtn label="BORROW" cost={fmt(loanAmount)} color="#f0a500"
+                  onClick={() => onTakeLoan(loanAmount)} />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+    </div>
+  );
+}
 
 function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; onLogout: () => void }) {
-  const { game, players, marketItems, rumors, purchasedRumorIds, events, auction, inventory, contracts, me, buy, sell, buyRumor, bid, acceptContract, cancelContract, completeContract } = conn;
+  const { game, players, marketItems, rumors, purchasedRumorIds, events, auction, inventory, contracts, bounties, myLoan, me, buy, sell, buyRumor, bid, acceptContract, cancelContract, completeContract, placeBounty, targetBlackout, pumpItem, takeLoan, repayLoan, assassinatePlayer } = conn;
   const [tab, setTab] = useState<Tab>("MARKET");
   const [selectedId, setSelectedId] = useState<string>("gold");
   const [bidInput, setBidInput] = useState("");
@@ -721,7 +947,10 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
   if (!me || !game) return <LoadingScreen label="LOADING MARKET DATA..." />;
 
   const objective = ALL_OBJECTIVES.find((o) => o.id === me.objective_id) ?? ALL_OBJECTIVES[0];
-  const blackout = !!(game.blackout_until && new Date(game.blackout_until).getTime() > now);
+  const blackout = !!(game.blackout_until && new Date(game.blackout_until).getTime() > now)
+    || !!(me.player_blackout_until && new Date(me.player_blackout_until).getTime() > now);
+  const frozen = !!(me.frozen_until && new Date(me.frozen_until).getTime() > now);
+  const frozenSecsLeft = frozen ? Math.ceil((new Date(me.frozen_until!).getTime() - now) / 1000) : 0;
   const startedAtMs = game.started_at ? new Date(game.started_at).getTime() : now;
   const remainingSec = Math.max(0, Math.round(game.duration_seconds - (now - startedAtMs) / 1000));
   const mins = Math.floor(remainingSec / 60);
@@ -755,6 +984,31 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
     try { await bid(amount); setBidInput(""); notify(`✓ BID PLACED — ${fmt(amount)}`); }
     catch (e) { notify(`✗ ${(e as Error).message}`); }
   }
+  async function handlePlaceBounty(targetId: string, amount: number) {
+    try { await placeBounty(targetId, amount); notify(`✓ BOUNTY PLACED — ₦${amount.toLocaleString()} committed`); }
+    catch (e) { notify(`✗ ${(e as Error).message}`); }
+  }
+  async function handleTargetBlackout(targetId: string) {
+    try { await targetBlackout(targetId); notify("✓ SIGNAL JAM DEPLOYED — ₦5,000 spent"); }
+    catch (e) { notify(`✗ ${(e as Error).message}`); }
+  }
+  async function handlePumpItem(itemId: string) {
+    try { await pumpItem(itemId); notify("✓ PUMP INITIATED — sell before the crash"); }
+    catch (e) { notify(`✗ ${(e as Error).message}`); }
+  }
+  async function handleTakeLoan(amount: number) {
+    try { await takeLoan(amount); notify(`✓ ₦${amount.toLocaleString()} borrowed — repay within 90s`); }
+    catch (e) { notify(`✗ ${(e as Error).message}`); }
+  }
+  async function handleRepayLoan() {
+    try { await repayLoan(); notify("✓ LOAN REPAID"); }
+    catch (e) { notify(`✗ ${(e as Error).message}`); }
+  }
+  async function handleAssassinate(targetId: string) {
+    if (!window.confirm("Spend ₦75,000 to freeze this player for 90 seconds?")) return;
+    try { await assassinatePlayer(targetId); notify("☠️ TARGET NEUTRALISED — 90s freeze deployed"); }
+    catch (e) { notify(`✗ ${(e as Error).message}`); }
+  }
   async function handleAcceptContract(id: string) {
     try { await acceptContract(id); notify("✓ CONTRACT ACCEPTED"); }
     catch (e) { notify(`✗ ${(e as Error).message}`); }
@@ -783,6 +1037,9 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
   const sortedPlayers = [...players].sort((a, b) => b.net_worth - a.net_worth);
   const myRank = sortedPlayers.findIndex((p) => p.id === me.id) + 1;
 
+  const isFrozen = !!(me.frozen_until && new Date(me.frozen_until).getTime() > now);
+  const isPersonalBlackout = !!(me.player_blackout_until && new Date(me.player_blackout_until).getTime() > now);
+  const effectiveBlackout = blackout || isPersonalBlackout;
   const chartData = selectedItem ? selectedItem.history.map((v, i) => ({ t: i, v })) : [];
   const auctionTimeLeft = auction ? Math.max(0, Math.round((new Date(auction.ends_at).getTime() - now) / 1000)) : 0;
 
@@ -810,6 +1067,48 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
         </div>
         <div className="px-3 py-2.5 border-r border-border shrink-0"><div className="font-mono text-[9px] text-[#5c6878] tracking-widest">TRADES</div><div className="font-mono text-[14px] font-bold tabular-nums text-[#d8d0c4]">{tradeCount}</div></div>
         <div className="px-3 py-2.5 border-r border-border shrink-0"><div className="font-mono text-[9px] text-[#5c6878] tracking-widest">RANK</div><div className="font-mono text-[14px] font-bold tabular-nums text-[#06b6d4]">#{myRank}</div></div>
+        {me.wanted_level > 0 && (
+          <div className="px-3 py-2.5 border-r border-border shrink-0">
+            <div className="font-mono text-[9px] text-[#5c6878] tracking-widest">HEAT</div>
+            <div className="flex items-center gap-0.5 mt-0.5">
+              {[1,2,3,4,5].map((n) => (
+                <div key={n} className="w-2 h-2 rounded-full" style={{ background: n <= me.wanted_level ? (me.wanted_level >= 4 ? "#ff3333" : me.wanted_level >= 3 ? "#f0a500" : "#eab308") : "#2a3444" }} />
+              ))}
+            </div>
+          </div>
+        )}
+        {me.frozen_until && new Date(me.frozen_until).getTime() > now && (
+          <div className="px-3 py-2.5 border-r border-border shrink-0 bg-[#06b6d4]/10 animate-pulse">
+            <div className="font-mono text-[9px] text-[#06b6d4] tracking-widest">FROZEN</div>
+            <div className="font-mono text-[11px] font-bold text-[#06b6d4]">{Math.round((new Date(me.frozen_until).getTime() - now) / 1000)}s</div>
+          </div>
+        )}
+        {me.total_debt > 0 && (
+          <div className="px-3 py-2.5 border-r border-border shrink-0 bg-[#ff3333]/10">
+            <div className="font-mono text-[9px] text-[#ff3333] tracking-widest">DEBT</div>
+            <div className="font-mono text-[11px] font-bold text-[#ff3333]">{fmt(me.total_debt)}</div>
+          </div>
+        )}
+        <div className="px-3 py-2.5 border-r border-border shrink-0">
+          <div className="font-mono text-[9px] text-[#5c6878] tracking-widest">HEAT</div>
+          <div className="flex items-center gap-0.5 mt-0.5">
+            {[1,2,3,4,5].map((n) => (
+              <div key={n} className="w-2 h-2 rounded-none" style={{ background: n <= me.wanted_level ? (me.wanted_level >= 4 ? "#ff3333" : me.wanted_level >= 2 ? "#f0a500" : "#00e676") : "#2a3444" }} />
+            ))}
+          </div>
+        </div>
+        {frozen && (
+          <div className="px-3 py-2.5 border-r border-border shrink-0 bg-[#ff3333]/10 animate-pulse">
+            <div className="font-mono text-[9px] text-[#ff3333] tracking-widest">FROZEN</div>
+            <div className="font-mono text-[12px] font-bold text-[#ff3333]">{frozenSecsLeft}s</div>
+          </div>
+        )}
+        {me.total_debt > 0 && (
+          <div className="px-3 py-2.5 border-r border-border shrink-0 bg-[#f0a500]/8">
+            <div className="font-mono text-[9px] text-[#f0a500] tracking-widest">DEBT</div>
+            <div className="font-mono text-[12px] font-bold text-[#f0a500] tabular-nums">{fmt(me.total_debt)}</div>
+          </div>
+        )}
         <div className="flex-1" />
         <button onClick={() => setShowObjective((v) => !v)} className="flex items-center gap-1.5 px-3 py-2.5 border-l border-border text-[#5c6878] hover:text-[#f0a500] transition-colors">
           {showObjective ? <EyeOff size={12} /> : <Eye size={12} />}<span className="font-mono text-[9px] tracking-widest" style={{ color: objective.color }}>{objective.role}</span>
@@ -833,8 +1132,8 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
       )}
 
       <div className="flex border-b border-border bg-[#0d1117] shrink-0">
-        {([{ id: "MARKET", icon: TrendingUp }, { id: "INTEL", icon: Radio }, { id: "INVENTORY", icon: Package }, { id: "CONTRACTS", icon: FileText }, { id: "PLAYERS", icon: Users }] as { id: Tab; icon: typeof TrendingUp }[]).map(({ id, icon: Icon }) => (
-          <button key={id} onClick={() => setTab(id)} className={`flex items-center gap-1.5 px-4 py-2.5 font-mono text-[10px] tracking-widest border-r border-border transition-colors ${tab === id ? "text-[#f0a500] border-b-2 border-b-[#f0a500] bg-[#f0a500]/5" : "text-[#5c6878] hover:text-[#d8d0c4] border-b-2 border-b-transparent"}`} style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+        {([{ id: "MARKET", icon: TrendingUp }, { id: "INTEL", icon: Radio }, { id: "INVENTORY", icon: Package }, { id: "CONTRACTS", icon: FileText }, { id: "PLAYERS", icon: Users }, { id: "OPS", icon: AlertTriangle }] as { id: Tab; icon: typeof TrendingUp }[]).map(({ id, icon: Icon }) => (
+          <button key={id} onClick={() => setTab(id)} className={`flex items-center gap-1.5 px-4 py-2.5 font-mono text-[10px] tracking-widest border-r border-border transition-colors ${tab === id ? (id === "OPS" ? "text-[#ff3333] border-b-2 border-b-[#ff3333] bg-[#ff3333]/5" : "text-[#f0a500] border-b-2 border-b-[#f0a500] bg-[#f0a500]/5") : "text-[#5c6878] hover:text-[#d8d0c4] border-b-2 border-b-transparent"}`} style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             <Icon size={10} />{id}
           </button>
         ))}
@@ -854,8 +1153,8 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5"><span className="font-mono text-[11px] font-bold truncate text-[#d8d0c4]">{item.name}</span>{item.is_illegal && <AlertTriangle size={8} className="text-[#ff3333] shrink-0" />}</div>
                           <div className="flex items-center justify-between mt-0.5">
-                            <span className="font-mono text-[12px] font-bold tabular-nums text-[#f0a500]">{blackout ? "???" : fmt(item.price)}</span>
-                            {!blackout && <PriceTicker change={item.change} changePercent={item.change_percent} />}
+                            <span className="font-mono text-[12px] font-bold tabular-nums text-[#f0a500]">{effectiveBlackout ? "???" : fmt(item.price)}</span>
+                            {!effectiveBlackout && <PriceTicker change={item.change} changePercent={item.change_percent} />}
                           </div>
                         </div>
                       </button>
@@ -876,12 +1175,12 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-mono text-[24px] font-bold tabular-nums text-[#f0a500]">{blackout ? "BLACKOUT" : fmt(selectedItem.price)}</div>
-                        {!blackout && <PriceTicker change={selectedItem.change} changePercent={selectedItem.change_percent} />}
+                        <div className="font-mono text-[24px] font-bold tabular-nums text-[#f0a500]">{effectiveBlackout ? "BLACKOUT" : fmt(selectedItem.price)}</div>
+                        {!effectiveBlackout && <PriceTicker change={selectedItem.change} changePercent={selectedItem.change_percent} />}
                       </div>
                     </div>
                     <div className="h-40 px-2 pt-3 shrink-0">
-                      {blackout ? (
+                      {effectiveBlackout ? (
                         <div className="h-full flex items-center justify-center font-mono text-[12px] text-[#5c6878] tracking-widest">— BLACKOUT EVENT — PRICE DATA HIDDEN —</div>
                       ) : (
                         <ResponsiveContainer width="100%" height="100%">
@@ -902,7 +1201,7 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
                           <button onClick={() => setBuyQty((q) => q + 1)} className="px-2 py-1.5 font-mono text-[12px] text-[#5c6878] hover:text-[#f0a500] transition-colors bg-[#141b24]">+</button>
                         </div>
                         <div className="font-mono text-[11px] text-[#5c6878]">TOTAL: <span className="text-[#f0a500] font-bold">{fmt(selectedItem.price * buyQty)}</span> <span className="text-[#ff3333] text-[9px]">+{fmt(Math.max(1, Math.round(selectedItem.price * buyQty * 0.03)))} fee</span></div>
-                        <button onClick={handleBuy} disabled={selectedItem.price * buyQty > cash} className="flex items-center gap-1.5 px-4 py-2 bg-[#00e676]/10 border border-[#00e676]/40 text-[#00e676] font-mono text-[11px] font-bold tracking-widest hover:bg-[#00e676]/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"><ShoppingCart size={10} />BUY</button>
+                        <button onClick={handleBuy} disabled={isFrozen || selectedItem.price * buyQty > cash} className="flex items-center gap-1.5 px-4 py-2 bg-[#00e676]/10 border border-[#00e676]/40 text-[#00e676] font-mono text-[11px] font-bold tracking-widest hover:bg-[#00e676]/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"><ShoppingCart size={10} />{isFrozen ? "FROZEN" : "BUY"}</button>
                         {inventory.find((i) => i.item_id === selectedId) && (
                           <button onClick={() => handleSell(selectedId)} className="flex items-center gap-1.5 px-4 py-2 bg-[#ff3333]/10 border border-[#ff3333]/40 text-[#ff3333] font-mono text-[11px] font-bold tracking-widest hover:bg-[#ff3333]/20 transition-colors"><TrendingDown size={10} />SELL ALL</button>
                         )}
@@ -1035,10 +1334,16 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
                 <div className="grid grid-cols-6 bg-[#0d1117] border-b border-border px-4 py-2">{["RANK", "HANDLE", "NET WORTH", "CASH", "REP", "TRADES"].map((h) => <div key={h} className="font-mono text-[9px] text-[#5c6878] tracking-widest">{h}</div>)}</div>
                 {sortedPlayers.filter((p) => !p.is_admin).map((p, idx) => {
                   const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : null;
+                  const hasBounty = conn.bounties.some((b) => b.target_id === p.id && b.status === "active");
                   return (
                     <div key={p.id} className="grid grid-cols-6 items-center px-4 py-3 border-b border-border hover:bg-[#141b24] transition-colors">
                       <div className="font-mono text-[12px] font-bold text-[#5c6878]">{medal || `#${idx + 1}`}</div>
-                      <div className="flex items-center gap-1.5"><span className="font-mono text-[11px] font-bold text-[#d8d0c4]">{p.handle}{p.id === me.id ? " (you)" : ""}</span>{p.online && <div className="w-1.5 h-1.5 rounded-full bg-[#00e676] animate-pulse" />}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-[11px] font-bold text-[#d8d0c4]">{p.handle}{p.id === me.id ? " (you)" : ""}</span>
+                        {p.online && <div className="w-1.5 h-1.5 rounded-full bg-[#00e676] animate-pulse" />}
+                        {hasBounty && <span className="text-[9px]">🎯</span>}
+                        {p.frozen_until && new Date(p.frozen_until).getTime() > now && <span className="text-[9px]">🧊</span>}
+                      </div>
                       <div className="font-mono text-[11px] font-bold text-[#06b6d4] tabular-nums">{fmt(p.net_worth)}</div>
                       <div className="font-mono text-[11px] tabular-nums text-[#f0a500]">{fmt(p.cash)}</div>
                       <div className="w-20"><RepBar value={p.rep} /></div>
@@ -1049,17 +1354,56 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
               </div>
             </div>
           )}
+
+          {tab === "OPS" && (
+            <OpsTab
+              me={me}
+              players={players.filter((p) => !p.is_admin && p.id !== me.id)}
+              marketItems={marketItems}
+              bounties={conn.bounties}
+              myLoan={conn.myLoan}
+              gameId={game.id}
+              now={now}
+              onPlaceBounty={async (targetId, amount) => {
+                try { await conn.placeBounty(targetId, amount); notify("🎯 BOUNTY PLACED"); }
+                catch (e) { notify(`✗ ${(e as Error).message}`); }
+              }}
+              onTargetBlackout={async (targetId) => {
+                try { await conn.targetBlackout(targetId); notify("📡 BLACKOUT SENT"); }
+                catch (e) { notify(`✗ ${(e as Error).message}`); }
+              }}
+              onPumpItem={async (itemId) => {
+                try { await conn.pumpItem(itemId); notify("📈 PUMP INITIATED"); }
+                catch (e) { notify(`✗ ${(e as Error).message}`); }
+              }}
+              onTakeLoan={async (amount) => {
+                try { await conn.takeLoan(amount); notify(`💸 BORROWED ${fmt(amount)}`); }
+                catch (e) { notify(`✗ ${(e as Error).message}`); }
+              }}
+              onRepayLoan={async () => {
+                try { await conn.repayLoan(); notify("✅ LOAN REPAID"); }
+                catch (e) { notify(`✗ ${(e as Error).message}`); }
+              }}
+              onAssassinate={async (targetId) => {
+                try { await conn.assassinatePlayer(targetId); notify("☠️ EXECUTED"); }
+                catch (e) { notify(`✗ ${(e as Error).message}`); }
+              }}
+            />
+          )}
         </div>
 
         <div className="w-64 border-l border-border flex-col overflow-hidden shrink-0 hidden lg:flex">
-          <div className="border-b border-border p-3 bg-[#0d1117] shrink-0">
-            <div className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] mb-2 flex items-center gap-1.5"><Gavel size={8} />LIVE AUCTION</div>
+          <div className={`border-b border-border p-3 shrink-0 ${auction?.is_final ? "bg-[#f0a500]/10 border-[#f0a500]/40" : "bg-[#0d1117]"}`}>
+            <div className={`font-mono text-[9px] tracking-[0.3em] mb-2 flex items-center gap-1.5 ${auction?.is_final ? "text-[#f0a500]" : "text-[#5c6878]"}`}>
+              <Gavel size={8} />{auction?.is_final ? "🏆 FINAL AUCTION" : "LIVE AUCTION"}
+            </div>
             {auction && (
               <>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-xl">{auction.icon}</span>
-                  <div><div className="font-mono text-[11px] font-bold text-[#d8d0c4]">{auction.name}</div><div className="font-mono text-[9px] text-[#5c6878]">{auction.bid_count} bids · {auctionTimeLeft}s left</div></div>
+                  <div><div className={`font-mono text-[11px] font-bold ${auction.is_final ? "text-[#f0a500]" : "text-[#d8d0c4]"}`}>{auction.name}</div><div className="font-mono text-[9px] text-[#5c6878]">{auction.bid_count} bids · {auctionTimeLeft}s left</div></div>
                 </div>
+                {auction.is_final && <div className="font-mono text-[9px] text-[#f0a500] mb-2 tracking-widest">WIN = ITEM + ₦20,000 BONUS</div>}
                 <div className="flex items-baseline justify-between mb-2"><div className="font-mono text-[9px] text-[#5c6878]">CURRENT BID</div><div className="font-mono text-[14px] font-bold text-[#f0a500] tabular-nums">{fmt(auction.current_bid)}</div></div>
                 {auction.current_bidder_id === me.id && <div className="font-mono text-[9px] text-[#00e676] mb-2">YOU'RE THE HIGH BIDDER</div>}
                 <div className="flex gap-1">
@@ -1092,8 +1436,8 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
           {[...marketItems, ...marketItems].map((item, i) => (
             <span key={`${item.id}-${i}`} className="font-mono text-[10px] tabular-nums shrink-0">
               <span className="text-[#5c6878]">{ITEM_META[item.id]?.icon ?? "📦"} {item.name}</span>{" "}
-              <span className="text-[#f0a500]">{blackout ? "???" : fmt(item.price)}</span>{" "}
-              {!blackout && <span style={{ color: item.change > 0 ? "#00e676" : item.change < 0 ? "#ff3333" : "#5c6878" }}>{item.change > 0 ? "▲" : item.change < 0 ? "▼" : "—"}{Math.abs(item.change_percent).toFixed(1)}%</span>}
+              <span className="text-[#f0a500]">{effectiveBlackout ? "???" : fmt(item.price)}</span>{" "}
+              {!effectiveBlackout && <span style={{ color: item.change > 0 ? "#00e676" : item.change < 0 ? "#ff3333" : "#5c6878" }}>{item.change > 0 ? "▲" : item.change < 0 ? "▼" : "—"}{Math.abs(item.change_percent).toFixed(1)}%</span>}
             </span>
           ))}
         </div>
