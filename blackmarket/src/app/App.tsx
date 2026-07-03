@@ -15,9 +15,13 @@ import type { ContractRow, MarketItemRow, PlayerRow, RumorRow } from "../lib/typ
 // server — this just maps stable ids to emoji/labels for display. ──────────
 
 const ITEM_META: Record<string, { icon: string }> = {
-  batteries: { icon: "🔋" }, electronics: { icon: "📱" }, gold: { icon: "🥇" }, fuel: { icon: "⚗️" },
-  ancient_coins: { icon: "🪙" }, crypto_keys: { icon: "🔑" }, lost_docs: { icon: "📄" }, bio_sample: { icon: "🧬" },
-  red_diamond: { icon: "💎" }, gov_secrets: { icon: "🗂️" }, quantum_chip: { icon: "⚡" },
+  batteries:     { icon: "🔋" }, electronics:  { icon: "📱" }, gold:         { icon: "🥇" },
+  fuel:          { icon: "⚗️"  }, medicine:     { icon: "💊" }, oil_drums:    { icon: "🛢️" },
+  ancient_coins: { icon: "🪙" }, crypto_keys:  { icon: "🔑" }, lost_docs:    { icon: "📄" },
+  data_drives:   { icon: "💾" }, rare_earth:    { icon: "🪨" }, bio_sample:   { icon: "🧬" },
+  weapons_cache: { icon: "🔫" }, red_diamond:   { icon: "💎" }, gov_secrets:  { icon: "🗂️" },
+  quantum_chip:  { icon: "⚡" }, prototype_ai:  { icon: "🤖" }, dark_matter:  { icon: "🌑" },
+  stolen_art:    { icon: "🖼️" }, neural_implant:{ icon: "🧠" },
 };
 
 interface SecretObjective { id: string; role: string; goal: string; hint: string; color: string; icon: string; }
@@ -116,6 +120,113 @@ function CopyLink({ code }: { code: string }) {
     <button onClick={copy} className="flex items-center gap-1.5 font-mono text-[9px] tracking-widest text-[#06b6d4] border border-[#06b6d4]/30 px-2.5 py-1.5 hover:bg-[#06b6d4]/10 transition-colors">
       {copied ? "✓ COPIED" : "COPY INVITE LINK"}
     </button>
+  );
+}
+
+// ─── Game Over Screen ─────────────────────────────────────────────────────────
+
+function GameOverScreen({
+  players, me, onLeave, onNewGame, isAdmin,
+}: {
+  players: PlayerRow[];
+  me: PlayerRow;
+  onLeave: () => void;
+  onNewGame: () => void;
+  isAdmin: boolean;
+}) {
+  const sorted = [...players].filter((p) => !p.is_admin).sort((a, b) => b.net_worth - a.net_worth);
+  const top3 = sorted.slice(0, 3);
+  const myRank = sorted.findIndex((p) => p.id === me.id) + 1;
+  const medals = ["🥇", "🥈", "🥉"];
+  const medalColors = ["#f0a500", "#9ca3af", "#b45309"];
+  const obj = ALL_OBJECTIVES.find((o) => o.id === me.objective_id);
+
+  return (
+    <div className="size-full flex flex-col items-center justify-center bg-background relative overflow-hidden" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+      <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{
+        backgroundImage: "linear-gradient(#f0a500 1px, transparent 1px), linear-gradient(90deg, #f0a500 1px, transparent 1px)", backgroundSize: "40px 40px",
+      }} />
+
+      <div className="relative z-10 w-full max-w-lg px-6">
+        <div className="text-center mb-8">
+          <div className="font-mono text-[11px] tracking-[0.4em] text-[#5c6878] mb-2">SESSION CLOSED</div>
+          <h1 className="text-[52px] font-black tracking-[-0.01em] leading-none text-[#f0a500]">GAME OVER</h1>
+          <div className="font-mono text-[11px] text-[#5c6878] mt-2 tracking-widest">THE MARKET HAS COLLAPSED</div>
+        </div>
+
+        {/* Top 3 podium */}
+        <div className="mb-6">
+          <div className="font-mono text-[9px] tracking-[0.3em] text-[#5c6878] mb-3 text-center">FINAL STANDINGS</div>
+          <div className="space-y-2">
+            {top3.map((p, i) => {
+              const isMe = p.id === me.id;
+              const pObj = ALL_OBJECTIVES.find((o) => o.id === p.objective_id);
+              return (
+                <div key={p.id} className="flex items-center gap-3 px-4 py-3 border" style={{
+                  borderColor: medalColors[i] + "40",
+                  background: medalColors[i] + "08",
+                }}>
+                  <span className="text-2xl shrink-0">{medals[i]}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[14px] font-black text-[#d8d0c4]">{p.handle}</span>
+                      {isMe && <span className="font-mono text-[8px] border border-[#f0a500]/40 text-[#f0a500] px-1">YOU</span>}
+                    </div>
+                    {pObj && <div className="font-mono text-[9px] mt-0.5" style={{ color: pObj.color }}>{pObj.icon} {pObj.role}</div>}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-mono text-[16px] font-black tabular-nums" style={{ color: medalColors[i] }}>{fmt(p.net_worth)}</div>
+                    <div className="font-mono text-[9px] text-[#5c6878]">NET WORTH</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Your result if not in top 3 */}
+        {myRank > 3 && (
+          <div className="mb-6 px-4 py-3 border border-[#2a3444] bg-[#0d1117]">
+            <div className="font-mono text-[9px] text-[#5c6878] tracking-widest mb-2">YOUR RESULT</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-mono text-[13px] font-bold text-[#d8d0c4]">#{myRank} — {me.handle}</div>
+                {obj && <div className="font-mono text-[9px] mt-0.5" style={{ color: obj.color }}>{obj.icon} {obj.role}</div>}
+              </div>
+              <div className="text-right">
+                <div className="font-mono text-[16px] font-black text-[#f0a500] tabular-nums">{fmt(me.net_worth)}</div>
+                <div className="font-mono text-[9px] text-[#5c6878]">FINAL NET WORTH</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Full leaderboard (scrollable) */}
+        {sorted.length > 3 && (
+          <div className="mb-6 border border-border max-h-36 overflow-y-auto">
+            {sorted.slice(3).map((p, i) => (
+              <div key={p.id} className="flex items-center px-3 py-2 border-b border-border last:border-0">
+                <span className="font-mono text-[10px] text-[#5c6878] w-6">#{i + 4}</span>
+                <span className="font-mono text-[11px] font-bold text-[#d8d0c4] flex-1">{p.handle}{p.id === me.id ? " (you)" : ""}</span>
+                <span className="font-mono text-[11px] tabular-nums text-[#f0a500]">{fmt(p.net_worth)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex flex-col gap-3">
+          {isAdmin && (
+            <button onClick={onNewGame} className="w-full py-3.5 bg-[#00e676]/10 border border-[#00e676]/40 text-[#00e676] font-black text-[14px] tracking-[0.2em] hover:bg-[#00e676]/20 transition-colors" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+              HOST NEW GAME
+            </button>
+          )}
+          <button onClick={onLeave} className="w-full py-3 border border-border text-[#5c6878] font-mono text-[11px] tracking-widest hover:text-[#d8d0c4] hover:border-[#5c6878] transition-colors">
+            {isAdmin ? "LEAVE ROOM" : "JOIN ANOTHER ROOM"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -732,8 +843,8 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 overflow-y-auto">
           {tab === "MARKET" && (
-            <div className="flex flex-col lg:flex-row h-full">
-              <div className="w-full lg:w-64 border-r border-border overflow-y-auto shrink-0">
+            <div className="flex flex-col lg:flex-row">
+              <div className="w-full lg:w-64 border-r border-border lg:overflow-y-auto shrink-0 lg:h-full">
                 {(["legendary", "rare", "common"] as const).map((tier) => (
                   <div key={tier}>
                     <div className="px-3 py-1.5 bg-[#0d1117] border-b border-border"><span className="font-mono text-[9px] tracking-[0.3em] text-[#5c6878]" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>{tier.toUpperCase()}</span></div>
@@ -790,7 +901,7 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
                           <div className="px-3 py-1.5 font-mono text-[12px] font-bold text-[#d8d0c4] bg-[#0d1117] min-w-[3rem] text-center tabular-nums">{buyQty}</div>
                           <button onClick={() => setBuyQty((q) => q + 1)} className="px-2 py-1.5 font-mono text-[12px] text-[#5c6878] hover:text-[#f0a500] transition-colors bg-[#141b24]">+</button>
                         </div>
-                        <div className="font-mono text-[11px] text-[#5c6878]">TOTAL: <span className="text-[#f0a500] font-bold">{fmt(selectedItem.price * buyQty)}</span></div>
+                        <div className="font-mono text-[11px] text-[#5c6878]">TOTAL: <span className="text-[#f0a500] font-bold">{fmt(selectedItem.price * buyQty)}</span> <span className="text-[#ff3333] text-[9px]">+{fmt(Math.max(1, Math.round(selectedItem.price * buyQty * 0.03)))} fee</span></div>
                         <button onClick={handleBuy} disabled={selectedItem.price * buyQty > cash} className="flex items-center gap-1.5 px-4 py-2 bg-[#00e676]/10 border border-[#00e676]/40 text-[#00e676] font-mono text-[11px] font-bold tracking-widest hover:bg-[#00e676]/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"><ShoppingCart size={10} />BUY</button>
                         {inventory.find((i) => i.item_id === selectedId) && (
                           <button onClick={() => handleSell(selectedId)} className="flex items-center gap-1.5 px-4 py-2 bg-[#ff3333]/10 border border-[#ff3333]/40 text-[#ff3333] font-mono text-[11px] font-bold tracking-widest hover:bg-[#ff3333]/20 transition-colors"><TrendingDown size={10} />SELL ALL</button>
@@ -1052,6 +1163,18 @@ export default function App() {
         onAddNpc={conn.addNpc}
         onAutoAssign={conn.autoAssignObjectives}
         gameStatus={game.status}
+      />
+    );
+  }
+
+  if (game.status === "ended") {
+    return (
+      <GameOverScreen
+        players={conn.players}
+        me={me}
+        onLeave={conn.leaveGame}
+        onNewGame={conn.resetGame}
+        isAdmin={me.is_admin}
       />
     );
   }

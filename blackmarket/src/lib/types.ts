@@ -13,6 +13,7 @@ export interface GameRow {
   tick_at: string;
   last_event_at: string;
   blackout_until: string | null;
+  winner_id: string | null;
   created_at: string;
 }
 
@@ -59,6 +60,7 @@ export interface RumorRow {
   text: string;
   credibility: "HOT" | "COLD" | "???";
   cost: number;
+  active: boolean;
 }
 
 export interface EventRow {

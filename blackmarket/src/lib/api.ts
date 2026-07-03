@@ -21,7 +21,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   INSUFFICIENT_FUNDS: "Insufficient funds.",
   NOTHING_TO_SELL: "You don't hold any of that item.",
   ALREADY_PURCHASED: "You already bought that intel.",
-  AUCTION_CLOSED: "That auction has already closed.",
+  ACCOUNT_FROZEN: "Your account is frozen — net worth is too low to trade.",
   BID_TOO_LOW: "Your bid must exceed the current bid.",
   CONTRACT_UNAVAILABLE: "That contract is no longer available.",
   CONTRACT_NOT_ACCEPTED: "You need to accept this contract before completing it.",
@@ -143,7 +143,8 @@ export async function fetchMarketItems(gameId: string) {
 }
 
 export async function fetchRumors(gameId: string) {
-  const { data, error } = await supabase.from("rumors").select("*").eq("game_id", gameId);
+  const { data, error } = await supabase
+    .from("rumors").select("*").eq("game_id", gameId).eq("active", true);
   if (error) throw friendlyError(error);
   return data as RumorRow[];
 }

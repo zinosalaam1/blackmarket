@@ -153,6 +153,18 @@ export function useGameConnection() {
             return exists ? prev.map((c) => (c.id === row.id ? row : c)) : [row, ...prev];
           });
         })
+      .on("postgres_changes", { event: "*", schema: "public", table: "rumors", filter: `game_id=eq.${gameId}` },
+        (payload) => {
+          const row = payload.new as RumorRow;
+          setRumors((prev) => {
+            if (payload.eventType === "DELETE" || (row && !row.active)) {
+              return prev.filter((r) => r.id !== (row?.id ?? (payload.old as RumorRow)?.id));
+            }
+            if (!row.active) return prev;
+            const exists = prev.some((r) => r.id === row.id);
+            return exists ? prev.map((r) => (r.id === row.id ? row : r)) : [...prev, row];
+          });
+        })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
