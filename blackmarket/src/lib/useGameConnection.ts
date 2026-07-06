@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import * as api from "./api";
 import type {
-  AuctionRow, ContractRow, EventRow, GameRow, InventoryRow, MarketItemRow, PlayerRow, ProfileRow, RumorRow,
+  AuctionRow, BountyRow, ContractRow, EventRow, GameRow, InventoryRow,
+  LoanRow, MarketItemRow, PlayerRow, ProfileRow, RumorRow,
 } from "./types";
 
 const ROOM_CODE_KEY = "bm_room_code";
@@ -23,6 +24,8 @@ export function useGameConnection() {
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [prefillCode, setPrefillCode] = useState<string | null>(null);
+  const [passwordRecoveryMode, setPasswordRecoveryMode] = useState(false);
+  const [publicRooms, setPublicRooms] = useState<import("./types").PublicRoomRow[]>([]);
 
   const [game, setGame] = useState<GameRow | null>(null);
   const [players, setPlayers] = useState<PlayerRow[]>([]);
@@ -33,6 +36,8 @@ export function useGameConnection() {
   const [auction, setAuction] = useState<AuctionRow | null>(null);
   const [inventory, setInventory] = useState<InventoryRow[]>([]);
   const [contracts, setContracts] = useState<ContractRow[]>([]);
+  const [bounties, setBounties] = useState<BountyRow[]>([]);
+  const [myLoan, setMyLoan] = useState<LoanRow | null>(null);
   const [onlinePlayerIds, setOnlinePlayerIds] = useState<Set<string>>(new Set());
 
   const gameIdRef = useRef<string | null>(null);
@@ -41,7 +46,7 @@ export function useGameConnection() {
 
   const loadRoom = useCallback(async (gameId: string) => {
     gameIdRef.current = gameId;
-    const [g, pl, mkt, rum, ev, au, ct] = await Promise.all([
+    const [g, pl, mkt, rum, ev, au, ct, bn] = await Promise.all([
       api.fetchGame(gameId),
       api.fetchPlayers(gameId),
       api.fetchMarketItems(gameId),
@@ -49,6 +54,7 @@ export function useGameConnection() {
       api.fetchEvents(gameId),
       api.fetchActiveAuction(gameId),
       api.fetchContracts(gameId),
+      api.fetchBounties(gameId),
     ]);
     setGame(g);
     setPlayers(pl);
@@ -57,6 +63,7 @@ export function useGameConnection() {
     setEvents(ev);
     setAuction(au);
     setContracts(ct);
+    setBounties(bn);
   }, []);
 
   // ── 1) Auth bootstrap + keep session in sync ──────────────────────────────
@@ -67,15 +74,20 @@ export function useGameConnection() {
       setSession(data.session ? { userId: data.session.user.id } : null);
       setAuthReady(true);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setPasswordRecoveryMode(true);
+        setSession(sess ? { userId: sess.user.id } : null);
+        return;
+      }
       setSession(sess ? { userId: sess.user.id } : null);
       if (!sess) {
-        // Signed out — clear all room state.
         setProfile(null);
         setGame(null);
         setPlayers([]);
         gameIdRef.current = null;
         localStorage.removeItem(ROOM_CODE_KEY);
+        setPasswordRecoveryMode(false);
       }
     });
     return () => { cancelled = true; sub.subscription.unsubscribe(); };
@@ -165,6 +177,15 @@ export function useGameConnection() {
             return exists ? prev.map((r) => (r.id === row.id ? row : r)) : [...prev, row];
           });
         })
+      .on("postgres_changes", { event: "*", schema: "public", table: "bounties", filter: `game_id=eq.${gameId}` },
+        (payload) => {
+          if (payload.eventType === "DELETE") return;
+          const row = payload.new as BountyRow;
+          setBounties((prev) => {
+            const exists = prev.some((b) => b.id === row.id);
+            return exists ? prev.map((b) => (b.id === row.id ? row : b)) : [row, ...prev];
+          });
+        })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -174,12 +195,14 @@ export function useGameConnection() {
   useEffect(() => {
     if (!rawMe) return;
     (async () => {
-      const [inv, purchased] = await Promise.all([
+      const [inv, purchased, loan] = await Promise.all([
         api.fetchInventory(rawMe.id),
         api.fetchPurchasedRumorIds(rawMe.id),
+        api.fetchMyLoan(rawMe.id, rawMe.game_id),
       ]);
       setInventory(inv);
       setPurchasedRumorIds(purchased);
+      setMyLoan(loan);
     })();
 
     const channel = supabase
@@ -195,6 +218,12 @@ export function useGameConnection() {
             const exists = prev.some((i) => i.item_id === row.item_id);
             return exists ? prev.map((i) => (i.item_id === row.item_id ? row : i)) : [...prev, row];
           });
+        })
+      .on("postgres_changes", { event: "*", schema: "public", table: "loans", filter: `player_id=eq.${rawMe.id}` },
+        (payload) => {
+          const row = payload.new as LoanRow;
+          if (row?.status === "active") setMyLoan(row);
+          else setMyLoan(null);
         })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -253,20 +282,6 @@ export function useGameConnection() {
   }, []);
 
   // ── Room actions ─────────────────────────────────────────────────────────
-
-  const hostRoom = useCallback(async () => {
-    const g = await api.createRoom();
-    localStorage.setItem(ROOM_CODE_KEY, g.code);
-    await loadRoom(g.id);
-    return g;
-  }, [loadRoom]);
-
-  const enterRoom = useCallback(async (code: string) => {
-    const p = await api.joinRoom(code);
-    localStorage.setItem(ROOM_CODE_KEY, code.toUpperCase().trim());
-    await loadRoom(p.game_id);
-    return p;
-  }, [loadRoom]);
 
   const leaveGame = useCallback(async () => {
     if (!game) return;
@@ -345,6 +360,45 @@ export function useGameConnection() {
     return a;
   }, [auction?.id]);
 
+  const placeBounty = useCallback(async (targetId: string, amount: number) => {
+    if (!game) throw new Error("No active game");
+    const b = await api.placeBounty(game.id, targetId, amount);
+    setBounties((prev) => [b, ...prev]);
+    return b;
+  }, [game?.id]);
+
+  const targetBlackout = useCallback(async (targetId: string) => {
+    if (!game) throw new Error("No active game");
+    await api.targetBlackout(game.id, targetId);
+  }, [game?.id]);
+
+  const pumpItem = useCallback(async (itemId: string) => {
+    if (!game) throw new Error("No active game");
+    const mkt = await api.pumpItem(game.id, itemId);
+    setMarketItems((prev) => prev.map((i) => (i.id === mkt.id ? mkt : i)));
+    return mkt;
+  }, [game?.id]);
+
+  const takeLoan = useCallback(async (amount: number) => {
+    if (!game) throw new Error("No active game");
+    const l = await api.takeLoan(game.id, amount);
+    setMyLoan(l);
+    return l;
+  }, [game?.id]);
+
+  const repayLoan = useCallback(async () => {
+    if (!game) throw new Error("No active game");
+    const p = await api.repayLoan(game.id);
+    setPlayers((prev) => prev.map((x) => (x.id === p.id ? p : x)));
+    setMyLoan(null);
+    return p;
+  }, [game?.id]);
+
+  const assassinatePlayer = useCallback(async (targetId: string) => {
+    if (!game) throw new Error("No active game");
+    await api.assassinatePlayer(game.id, targetId);
+  }, [game?.id]);
+
   const acceptContract = useCallback(async (contractId: string) => {
     const c = await api.acceptContract(contractId);
     setContracts((prev) => prev.map((x) => (x.id === c.id ? c : x)));
@@ -363,13 +417,48 @@ export function useGameConnection() {
     return p;
   }, []);
 
+  const requestPasswordReset = useCallback(async (email: string) => {
+    await api.requestPasswordReset(email);
+  }, []);
+
+  const updatePassword = useCallback(async (password: string) => {
+    await api.updatePassword(password);
+    setPasswordRecoveryMode(false);
+  }, []);
+
+  const resendConfirmation = useCallback(async (email: string) => {
+    await api.resendConfirmation(email);
+  }, []);
+
+  const refreshPublicRooms = useCallback(async () => {
+    const rooms = await api.listPublicRooms();
+    setPublicRooms(rooms);
+  }, []);
+
+  const hostRoom = useCallback(async (isPublic = false, roomName?: string) => {
+    const g = await api.createRoom(isPublic, roomName);
+    localStorage.setItem(ROOM_CODE_KEY, g.code);
+    await loadRoom(g.id);
+    return g;
+  }, [loadRoom]);
+
   return {
     authReady, session, profile, error, prefillCode,
-    game, players: players_, marketItems, rumors, purchasedRumorIds, events, auction, inventory, contracts, me,
+    passwordRecoveryMode, publicRooms,
+    game, players: players_, marketItems, rumors, purchasedRumorIds,
+    events, auction, inventory, contracts, bounties, myLoan, me,
     signUp, signIn, signOut, completeProfile,
-    hostRoom, enterRoom, leaveGame, resetGame,
+    requestPasswordReset, updatePassword, resendConfirmation,
+    refreshPublicRooms, hostRoom, enterRoom: async (code: string) => {
+      const p = await api.joinRoom(code);
+      localStorage.setItem(ROOM_CODE_KEY, code.toUpperCase().trim());
+      await loadRoom(p.game_id);
+      return p;
+    },
+    leaveGame, resetGame,
     startGame, addNpc, updatePlayerObjective, removePlayer,
     autoAssignObjectives, triggerEvent, buy, sell, buyRumor, bid,
     acceptContract, cancelContract, completeContract,
+    placeBounty, targetBlackout, pumpItem, takeLoan, repayLoan, assassinatePlayer,
   };
 }

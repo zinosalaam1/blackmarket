@@ -1,0 +1,19 @@
+/* ── Mobile / WebView touch fixes ──────────────────────────────────────────
+   touch-action: manipulation  removes the 300ms tap delay on Android WebView
+   and prevents the browser from treating a quick tap as a scroll gesture.
+   -webkit-tap-highlight-color: transparent  removes the grey flash on tap
+   that Android shows by default on clickable elements. */
+
+button,
+[role="button"],
+a {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+
+/* Prevent the whole page from bouncing/rubber-banding on overscroll —
+   each scrollable container handles its own scroll independently. */
+body {
+  overscroll-behavior: none;
+}

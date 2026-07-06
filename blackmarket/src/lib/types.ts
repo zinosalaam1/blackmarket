@@ -14,6 +14,19 @@ export interface GameRow {
   last_event_at: string;
   blackout_until: string | null;
   winner_id: string | null;
+  is_public: boolean;
+  player_count: number;
+  room_name: string | null;
+  created_at: string;
+}
+
+export interface PublicRoomRow {
+  id: string;
+  code: string;
+  room_name: string | null;
+  status: GameStatus;
+  phase: GamePhase;
+  player_count: number;
   created_at: string;
 }
 
@@ -31,6 +44,17 @@ export interface PlayerRow {
   trade_count: number;
   online: boolean;
   joined_at: string;
+  wanted_level: number;
+  frozen_until: string | null;
+  player_blackout_until: string | null;
+  total_debt: number;
+  objective_completed: boolean | null;
+  objective_score: string | null;
+  crash_triggers: number;
+  illegal_trade_count: number;
+  ops_actions_count: number;
+  npc_strategy: string;
+  peak_rank: number | null;
 }
 
 export interface MarketItemRow {
@@ -45,6 +69,7 @@ export interface MarketItemRow {
   trend: "up" | "down" | "stable";
   is_illegal: boolean;
   history: number[];
+  pump_until: string | null;
 }
 
 export interface InventoryRow {
@@ -81,7 +106,32 @@ export interface AuctionRow {
   bid_count: number;
   ends_at: string;
   settled: boolean;
+  is_final: boolean;
   created_at: string;
+}
+
+export interface BountyRow {
+  id: string;
+  game_id: string;
+  placer_id: string;
+  target_id: string;
+  amount: number;
+  triggers_remaining: number;
+  status: "active" | "expired";
+  created_at: string;
+}
+
+export type LoanStatus = "active" | "repaid" | "defaulted";
+
+export interface LoanRow {
+  id: string;
+  game_id: string;
+  player_id: string;
+  principal: number;
+  total_owed: number;
+  due_at: string;
+  status: LoanStatus;
+  taken_at: string;
 }
 
 export interface ProfileRow {

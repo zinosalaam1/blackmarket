@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 import type {
-  AuctionRow, ContractRow, EventRow, GameRow, InventoryRow, MarketItemRow, PlayerRow, ProfileRow, RumorRow,
+  AuctionRow, BountyRow, ContractRow, EventRow, GameRow, InventoryRow,
+  LoanRow, MarketItemRow, PlayerRow, ProfileRow, RumorRow,
 } from "./types";
 
 // Friendly error messages for the exceptions raised by the RPC functions in
@@ -22,6 +23,17 @@ const ERROR_MESSAGES: Record<string, string> = {
   NOTHING_TO_SELL: "You don't hold any of that item.",
   ALREADY_PURCHASED: "You already bought that intel.",
   ACCOUNT_FROZEN: "Your account is frozen — net worth is too low to trade.",
+  PLAYER_FROZEN: "Your account has been frozen. You cannot trade right now.",
+  UNKNOWN_TARGET: "Unknown target player.",
+  CANT_TARGET_SELF: "You can't target yourself.",
+  CANT_TARGET_ADMIN: "You can't target the admin.",
+  TARGET_ALREADY_FROZEN: "That player is already frozen.",
+  ALREADY_PUMPED: "That item is already being pumped.",
+  EXISTING_LOAN: "You already have an active loan. Repay it first.",
+  INVALID_LOAN_AMOUNT: "Loan must be between ₦1,000 and ₦25,000.",
+  LOAN_PERIOD_CLOSED: "Loans are closed in the last 2 minutes of the game.",
+  NO_ACTIVE_LOAN: "You have no active loan to repay.",
+  BOUNTY_TOO_LOW: "Minimum bounty is ₦2,000.",
   BID_TOO_LOW: "Your bid must exceed the current bid.",
   CONTRACT_UNAVAILABLE: "That contract is no longer available.",
   CONTRACT_NOT_ACCEPTED: "You need to accept this contract before completing it.",
@@ -51,7 +63,7 @@ async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
 export async function signUp(email: string, password: string) {
   const { data, error } = await supabase.auth.signUp({ email, password });
   if (error) throw friendlyError(error);
-  return data; // data.session is null if email confirmation is required
+  return { session: data.session, needsConfirmation: !data.session };
 }
 
 export async function signIn(email: string, password: string) {
@@ -65,6 +77,23 @@ export async function signOut() {
   if (error) throw friendlyError(error);
 }
 
+export async function requestPasswordReset(email: string) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin,
+  });
+  if (error) throw friendlyError(error);
+}
+
+export async function updatePassword(password: string) {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw friendlyError(error);
+}
+
+export async function resendConfirmation(email: string) {
+  const { error } = await supabase.auth.resend({ type: "signup", email });
+  if (error) throw friendlyError(error);
+}
+
 export async function fetchMyProfile() {
   const { data, error } = await supabase.from("profiles").select("*").maybeSingle();
   if (error) throw friendlyError(error);
@@ -75,9 +104,25 @@ export const createProfile = (handle: string) => rpc<ProfileRow>("create_profile
 
 // ── Rooms ────────────────────────────────────────────────────────────────────
 
-export const createRoom = () => rpc<GameRow>("create_room");
+export const createRoom = (isPublic = false, roomName?: string) =>
+  rpc<GameRow>("create_room", { p_is_public: isPublic, p_room_name: roomName ?? null });
 export const joinRoom = (code: string) => rpc<PlayerRow>("join_room", { p_code: code });
 export const leaveGame = (gameId: string) => rpc<void>("leave_game", { p_game_id: gameId });
+
+export async function listPublicRooms() {
+  const { data, error } = await supabase.rpc("list_public_rooms");
+  if (error) throw friendlyError(error);
+  return (data ?? []) as import("./types").PublicRoomRow[];
+}
+
+export async function registerPushToken(token: string, platform: "android" | "ios" | "web") {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) return;
+  await supabase.from("device_tokens").upsert(
+    { user_id: user.id, token, platform, updated_at: new Date().toISOString() },
+    { onConflict: "user_id,platform" }
+  );
+}
 
 // ── Admin actions ────────────────────────────────────────────────────────────
 
@@ -107,6 +152,41 @@ export const buyRumor = (gameId: string, rumorId: string) =>
   rpc<PlayerRow>("buy_rumor", { p_game_id: gameId, p_rumor_id: rumorId });
 export const placeBid = (auctionId: string, amount: number) =>
   rpc<AuctionRow>("place_bid", { p_auction_id: auctionId, p_amount: amount });
+
+// ── Operations ────────────────────────────────────────────────────────────────
+
+export const placeBounty = (gameId: string, targetId: string, amount: number) =>
+  rpc<BountyRow>("place_bounty", { p_game_id: gameId, p_target_id: targetId, p_amount: amount });
+
+export const targetBlackout = (gameId: string, targetId: string) =>
+  rpc<void>("target_blackout", { p_game_id: gameId, p_target_id: targetId });
+
+export const pumpItem = (gameId: string, itemId: string) =>
+  rpc<MarketItemRow>("pump_item", { p_game_id: gameId, p_item_id: itemId });
+
+export const takeLoan = (gameId: string, amount: number) =>
+  rpc<LoanRow>("take_loan", { p_game_id: gameId, p_amount: amount });
+
+export const repayLoan = (gameId: string) =>
+  rpc<PlayerRow>("repay_loan", { p_game_id: gameId });
+
+export const assassinatePlayer = (gameId: string, targetId: string) =>
+  rpc<void>("assassinate_player", { p_game_id: gameId, p_target_id: targetId });
+
+export async function fetchBounties(gameId: string) {
+  const { data, error } = await supabase
+    .from("bounties").select("*").eq("game_id", gameId).order("created_at", { ascending: false });
+  if (error) throw friendlyError(error);
+  return data as BountyRow[];
+}
+
+export async function fetchMyLoan(playerId: string, gameId: string) {
+  const { data, error } = await supabase
+    .from("loans").select("*").eq("player_id", playerId).eq("game_id", gameId)
+    .eq("status", "active").maybeSingle();
+  if (error) throw friendlyError(error);
+  return data as LoanRow | null;
+}
 
 // ── Contracts ────────────────────────────────────────────────────────────────
 

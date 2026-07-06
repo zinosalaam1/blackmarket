@@ -8,7 +8,8 @@ import {
   Settings, Play, UserPlus, Send, Trash2, RefreshCw, Crown, Loader2,
 } from "lucide-react";
 import { useGameConnection } from "../lib/useGameConnection";
-import type { ContractRow, MarketItemRow, PlayerRow, RumorRow } from "../lib/types";
+import type { ContractRow, MarketItemRow, PlayerRow, PublicRoomRow, RumorRow } from "../lib/types";
+import * as Sounds from "../lib/sounds";
 
 // ─── Static, purely-cosmetic catalog (icons + secret-objective flavor text).
 // Gameplay-relevant numbers (price, tier, cash, etc.) always come from the
@@ -134,12 +135,17 @@ function GameOverScreen({
   onNewGame: () => void;
   isAdmin: boolean;
 }) {
-  const sorted = [...players].filter((p) => !p.is_admin).sort((a, b) => b.net_worth - a.net_worth);
+  const sorted = [...players].filter((p) => !p.is_admin).sort(
+    (a, b) => b.net_worth - a.net_worth || b.trade_count - a.trade_count
+  );
   const top3 = sorted.slice(0, 3);
   const myRank = sorted.findIndex((p) => p.id === me.id) + 1;
   const medals = ["🥇", "🥈", "🥉"];
   const medalColors = ["#f0a500", "#9ca3af", "#b45309"];
   const obj = ALL_OBJECTIVES.find((o) => o.id === me.objective_id);
+
+  // Play game-over fanfare once on mount
+  useEffect(() => { Sounds.playGameOver(); }, []);
 
   return (
     <div className="size-full flex flex-col items-center justify-center bg-background relative overflow-hidden" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
@@ -147,7 +153,7 @@ function GameOverScreen({
         backgroundImage: "linear-gradient(#f0a500 1px, transparent 1px), linear-gradient(90deg, #f0a500 1px, transparent 1px)", backgroundSize: "40px 40px",
       }} />
 
-      <div className="relative z-10 w-full max-w-lg px-6">
+      <div className="relative z-10 w-full max-w-lg px-6 overflow-y-auto max-h-screen py-6">
         <div className="text-center mb-8">
           <div className="font-mono text-[11px] tracking-[0.4em] text-[#5c6878] mb-2">SESSION CLOSED</div>
           <h1 className="text-[52px] font-black tracking-[-0.01em] leading-none text-[#f0a500]">GAME OVER</h1>
@@ -155,7 +161,7 @@ function GameOverScreen({
         </div>
 
         {/* Top 3 podium */}
-        <div className="mb-6">
+        <div className="mb-4">
           <div className="font-mono text-[9px] tracking-[0.3em] text-[#5c6878] mb-3 text-center">FINAL STANDINGS</div>
           <div className="space-y-2">
             {top3.map((p, i) => {
@@ -163,8 +169,7 @@ function GameOverScreen({
               const pObj = ALL_OBJECTIVES.find((o) => o.id === p.objective_id);
               return (
                 <div key={p.id} className="flex items-center gap-3 px-4 py-3 border" style={{
-                  borderColor: medalColors[i] + "40",
-                  background: medalColors[i] + "08",
+                  borderColor: medalColors[i] + "40", background: medalColors[i] + "08",
                 }}>
                   <span className="text-2xl shrink-0">{medals[i]}</span>
                   <div className="flex-1 min-w-0">
@@ -172,7 +177,14 @@ function GameOverScreen({
                       <span className="font-mono text-[14px] font-black text-[#d8d0c4]">{p.handle}</span>
                       {isMe && <span className="font-mono text-[8px] border border-[#f0a500]/40 text-[#f0a500] px-1">YOU</span>}
                     </div>
-                    {pObj && <div className="font-mono text-[9px] mt-0.5" style={{ color: pObj.color }}>{pObj.icon} {pObj.role}</div>}
+                    {pObj && (
+                      <div className="font-mono text-[9px] mt-0.5 flex items-center gap-1" style={{ color: pObj.color }}>
+                        {pObj.icon} {pObj.role}
+                        {p.objective_completed === true && <span className="text-[#00e676] ml-1">✓ COMPLETE</span>}
+                        {p.objective_completed === false && <span className="text-[#ff3333] ml-1">✗ FAILED</span>}
+                      </div>
+                    )}
+                    {p.objective_score && <div className="font-mono text-[8px] text-[#5c6878] mt-0.5">{p.objective_score}</div>}
                   </div>
                   <div className="text-right shrink-0">
                     <div className="font-mono text-[16px] font-black tabular-nums" style={{ color: medalColors[i] }}>{fmt(p.net_worth)}</div>
@@ -184,16 +196,23 @@ function GameOverScreen({
           </div>
         </div>
 
-        {/* Your result if not in top 3 */}
-        {myRank > 3 && (
-          <div className="mb-6 px-4 py-3 border border-[#2a3444] bg-[#0d1117]">
+        {/* Your result if outside top 3 */}
+        {myRank > 3 && !me.is_admin && (
+          <div className="mb-4 px-4 py-3 border border-[#2a3444] bg-[#0d1117]">
             <div className="font-mono text-[9px] text-[#5c6878] tracking-widest mb-2">YOUR RESULT</div>
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1">
                 <div className="font-mono text-[13px] font-bold text-[#d8d0c4]">#{myRank} — {me.handle}</div>
-                {obj && <div className="font-mono text-[9px] mt-0.5" style={{ color: obj.color }}>{obj.icon} {obj.role}</div>}
+                {obj && (
+                  <div className="font-mono text-[9px] mt-0.5 flex items-center gap-1" style={{ color: obj.color }}>
+                    {obj.icon} {obj.role}
+                    {me.objective_completed === true && <span className="text-[#00e676] ml-1">✓ COMPLETE</span>}
+                    {me.objective_completed === false && <span className="text-[#ff3333] ml-1">✗ FAILED</span>}
+                  </div>
+                )}
+                {me.objective_score && <div className="font-mono text-[8px] text-[#5c6878] mt-0.5">{me.objective_score}</div>}
               </div>
-              <div className="text-right">
+              <div className="text-right shrink-0">
                 <div className="font-mono text-[16px] font-black text-[#f0a500] tabular-nums">{fmt(me.net_worth)}</div>
                 <div className="font-mono text-[9px] text-[#5c6878]">FINAL NET WORTH</div>
               </div>
@@ -201,13 +220,15 @@ function GameOverScreen({
           </div>
         )}
 
-        {/* Full leaderboard (scrollable) */}
+        {/* Full leaderboard */}
         {sorted.length > 3 && (
-          <div className="mb-6 border border-border max-h-36 overflow-y-auto">
+          <div className="mb-4 border border-border max-h-36 overflow-y-auto">
             {sorted.slice(3).map((p, i) => (
               <div key={p.id} className="flex items-center px-3 py-2 border-b border-border last:border-0">
                 <span className="font-mono text-[10px] text-[#5c6878] w-6">#{i + 4}</span>
                 <span className="font-mono text-[11px] font-bold text-[#d8d0c4] flex-1">{p.handle}{p.id === me.id ? " (you)" : ""}</span>
+                {p.objective_completed === true && <span className="text-[#00e676] text-[9px] mr-2">✓</span>}
+                {p.objective_completed === false && <span className="text-[#ff3333] text-[9px] mr-2">✗</span>}
                 <span className="font-mono text-[11px] tabular-nums text-[#f0a500]">{fmt(p.net_worth)}</span>
               </div>
             ))}
@@ -224,6 +245,298 @@ function GameOverScreen({
           <button onClick={onLeave} className="w-full py-3 border border-border text-[#5c6878] font-mono text-[11px] tracking-widest hover:text-[#d8d0c4] hover:border-[#5c6878] transition-colors">
             {isAdmin ? "LEAVE ROOM" : "JOIN ANOTHER ROOM"}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ─── Onboarding (first-time only, localStorage gated) ────────────────────────
+
+const ONBOARDING_KEY = "bm_onboarding_v1";
+
+const ONBOARDING_STEPS = [
+  {
+    icon: "🏪", title: "WELCOME TO THE BLACK MARKET",
+    body: "An underground trading simulation. You have 15 minutes, ₦10,000 starting cash, and a secret objective nobody else knows about. Buy low, sell high — or burn it all down.",
+  },
+  {
+    icon: "📈", title: "TRADING",
+    body: "20 market items across three tiers: common, rare, and legendary. Prices fluctuate every 2 seconds. Every buy costs a 3% fee. Selling at a loss hurts your reputation. Mistakes are expensive.",
+  },
+  {
+    icon: "📡", title: "INTEL & CONTRACTS",
+    body: "Buy rumors in the INTEL tab to get tips on upcoming price moves. Accept contracts in CONTRACTS to earn big payouts — but you need to physically hold the goods to fulfill them.",
+  },
+  {
+    icon: "☠️", title: "COVERT OPS",
+    body: "The OPS tab lets you go dark: place bounties on rivals, blind their price feed, pump & dump an item, take a loan at 50% interest, or spend ₦75,000 to freeze someone's account for 90 seconds.",
+  },
+  {
+    icon: "🎭", title: "SECRET OBJECTIVES",
+    body: "You'll be assigned a hidden role — Tycoon, Ghost, Saboteur, Kingmaker, and more. Each has a unique win condition revealed only at the end. Play your objective, or ignore it entirely. Nobody knows.",
+  },
+];
+
+function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
+  const [step, setStep] = useState(0);
+  const current = ONBOARDING_STEPS[step];
+  const isLast = step === ONBOARDING_STEPS.length - 1;
+
+  function finish() {
+    localStorage.setItem(ONBOARDING_KEY, "1");
+    onComplete();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+      <div className="w-full max-w-md bg-[#0d1117] border border-[#f0a500]/30 p-6">
+        <div className="flex gap-1 mb-6">
+          {ONBOARDING_STEPS.map((_, i) => (
+            <div key={i} className="flex-1 h-0.5 rounded-full transition-colors" style={{ background: i <= step ? "#f0a500" : "#2a3444" }} />
+          ))}
+        </div>
+        <div className="text-center mb-6">
+          <div className="text-5xl mb-4">{current.icon}</div>
+          <div className="font-mono text-[11px] tracking-[0.3em] text-[#f0a500] mb-2">{step + 1} OF {ONBOARDING_STEPS.length}</div>
+          <div className="text-[22px] font-black text-[#d8d0c4] mb-3">{current.title}</div>
+          <div className="font-mono text-[12px] text-[#5c6878] leading-relaxed">{current.body}</div>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={finish} className="flex-1 py-2 font-mono text-[10px] tracking-widest text-[#2a3444] hover:text-[#5c6878] transition-colors">SKIP</button>
+          <button onClick={isLast ? finish : () => setStep(s => s + 1)}
+            className="flex-1 py-2.5 bg-[#f0a500] text-black font-black text-[13px] tracking-[0.2em] hover:bg-[#f0b800] transition-colors">
+            {isLast ? "LET'S PLAY" : "NEXT →"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Check Email (after signup when confirmation required) ────────────────────
+
+function CheckEmailScreen({ email, onResend, onBack }: {
+  email: string; onResend: () => Promise<void>; onBack: () => void;
+}) {
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function resend() {
+    setBusy(true);
+    try { await onResend(); setSent(true); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="size-full flex items-center justify-center bg-background" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+      <div className="max-w-sm px-6 text-center">
+        <div className="text-5xl mb-4">📧</div>
+        <div className="text-[28px] font-black text-[#d8d0c4] mb-2">CHECK YOUR EMAIL</div>
+        <div className="font-mono text-[11px] text-[#5c6878] mb-6 leading-relaxed">
+          We sent a confirmation link to <span className="text-[#f0a500]">{email}</span>. Open it to activate your account, then come back and log in.
+        </div>
+        {sent && <div className="font-mono text-[10px] text-[#00e676] mb-3">✓ Resent successfully</div>}
+        <div className="flex flex-col gap-3">
+          <button onClick={resend} disabled={busy || sent}
+            className="w-full py-2.5 border border-[#f0a500]/40 text-[#f0a500] font-mono text-[11px] tracking-widest hover:bg-[#f0a500]/10 transition-colors disabled:opacity-40">
+            {busy ? "SENDING..." : sent ? "EMAIL SENT ✓" : "RESEND EMAIL"}
+          </button>
+          <button onClick={onBack} className="font-mono text-[10px] text-[#2a3444] hover:text-[#5c6878] transition-colors">← BACK TO LOGIN</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Reset Password ────────────────────────────────────────────────────────────
+
+function ResetPasswordScreen({ onReset }: { onReset: (password: string) => Promise<void> }) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    if (password !== confirm) { setError("Passwords don't match."); return; }
+    setBusy(true);
+    try { await onReset(password); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="size-full flex items-center justify-center bg-background" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+      <div className="w-full max-w-md px-6">
+        <div className="text-center mb-8">
+          <div className="text-5xl mb-3">🔐</div>
+          <div className="text-[32px] font-black text-[#f0a500]">SET NEW PASSWORD</div>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] block mb-2">NEW PASSWORD</label>
+            <input type="password" value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }} required minLength={6} autoFocus
+              className="w-full bg-[#0d1117] border border-border text-[#d8d0c4] font-mono text-[14px] px-4 py-3 focus:outline-none focus:border-[#f0a500]/60" />
+          </div>
+          <div>
+            <label className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] block mb-2">CONFIRM PASSWORD</label>
+            <input type="password" value={confirm} onChange={(e) => { setConfirm(e.target.value); setError(""); }} required
+              className="w-full bg-[#0d1117] border border-border text-[#d8d0c4] font-mono text-[14px] px-4 py-3 focus:outline-none focus:border-[#f0a500]/60" />
+            {error && <p className="font-mono text-[10px] text-[#ff3333] mt-1.5">{error}</p>}
+          </div>
+          <button type="submit" disabled={busy}
+            className="w-full py-3.5 bg-[#f0a500] text-black font-black text-[14px] tracking-[0.2em] hover:bg-[#f0b800] transition-colors disabled:opacity-50">
+            {busy ? "SAVING..." : "UPDATE PASSWORD"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Room Browser (replaces RoomGate) ────────────────────────────────────────
+
+function RoomBrowserScreen({
+  prefillCode, publicRooms, onHost, onJoin, onSignOut, onRefreshRooms,
+}: {
+  prefillCode: string | null;
+  publicRooms: import("../lib/types").PublicRoomRow[];
+  onHost: (isPublic: boolean, name?: string) => Promise<void>;
+  onJoin: (code: string) => Promise<void>;
+  onSignOut: () => Promise<void>;
+  onRefreshRooms: () => Promise<void>;
+}) {
+  const [mode, setMode] = useState<"browse" | "join" | "host">(prefillCode ? "join" : "browse");
+  const [code, setCode] = useState(prefillCode ?? "");
+  const [isPublic, setIsPublic] = useState(false);
+  const [roomName, setRoomName] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { onRefreshRooms(); }, []);
+
+  async function handleJoin(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setError("");
+    try { await onJoin(code); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  }
+
+  async function handleHost(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setError("");
+    try { await onHost(isPublic, roomName.trim() || undefined); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  }
+
+  async function handleJoinPublic(roomCode: string) {
+    setBusy(true); setError("");
+    try { await onJoin(roomCode); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  }
+
+  const phaseColor = (p: string) => p === "COLLAPSE" ? "#ff3333" : p === "FINAL PHASE" ? "#f0a500" : "#00e676";
+
+  return (
+    <div className="size-full flex flex-col items-center justify-center bg-background relative overflow-hidden" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+      <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{
+        backgroundImage: "linear-gradient(#f0a500 1px, transparent 1px), linear-gradient(90deg, #f0a500 1px, transparent 1px)", backgroundSize: "40px 40px",
+      }} />
+
+      <div className="relative z-10 w-full max-w-md px-6">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center gap-2 mb-3">
+            <div className="w-2 h-2 rounded-full bg-[#f0a500] animate-pulse" />
+            <span className="font-mono text-[10px] tracking-[0.4em] text-[#5c6878]">TOUR ARCADE</span>
+          </div>
+          <h1 className="text-[48px] font-black leading-none text-[#f0a500]">THE BLACK MARKET</h1>
+        </div>
+
+        <div className="flex border border-border mb-6">
+          {(["browse", "join", "host"] as const).map((m) => (
+            <button key={m} onClick={() => { setMode(m); setError(""); }}
+              className={`flex-1 py-2.5 font-mono text-[10px] tracking-widest transition-colors border-r border-border last:border-0 ${mode === m ? "bg-[#f0a500]/10 text-[#f0a500]" : "text-[#5c6878] hover:text-[#d8d0c4]"}`}>
+              {m === "browse" ? "BROWSE" : m === "join" ? "JOIN CODE" : "HOST GAME"}
+            </button>
+          ))}
+        </div>
+
+        {mode === "browse" && (
+          <div>
+            <div className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] mb-3 flex items-center justify-between">
+              <span>PUBLIC ROOMS</span>
+              <button onClick={onRefreshRooms} className="text-[#f0a500] hover:text-[#f0b800] transition-colors">↻ REFRESH</button>
+            </div>
+            {publicRooms.length === 0 ? (
+              <div className="border border-dashed border-[#2a3444] p-6 text-center font-mono text-[11px] text-[#5c6878] mb-4">
+                NO PUBLIC ROOMS OPEN — HOST ONE OR JOIN BY CODE
+              </div>
+            ) : (
+              <div className="border border-border mb-4 max-h-64 overflow-y-auto">
+                {publicRooms.map((room) => (
+                  <div key={room.id} className="flex items-center gap-3 px-4 py-3 border-b border-border last:border-0 hover:bg-[#141b24] transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-mono text-[12px] font-bold text-[#d8d0c4]">{room.room_name || formatCode(room.code)}</div>
+                      <div className="font-mono text-[9px] text-[#5c6878] flex items-center gap-2">
+                        <span className="font-mono tracking-widest" style={{ color: phaseColor(room.phase) }}>{room.phase}</span>
+                        <span>·</span>
+                        <span>{room.player_count} players</span>
+                        <span>·</span>
+                        <span>{formatCode(room.code)}</span>
+                      </div>
+                    </div>
+                    <button onClick={() => !busy && handleJoinPublic(room.code)} disabled={busy}
+                      className="font-mono text-[10px] tracking-widest text-[#00e676] border border-[#00e676]/40 px-3 py-1.5 hover:bg-[#00e676]/10 transition-colors disabled:opacity-40">
+                      JOIN
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {error && <p className="font-mono text-[10px] text-[#ff3333] mb-3">{error}</p>}
+          </div>
+        )}
+
+        {mode === "join" && (
+          <form onSubmit={handleJoin} className="space-y-4">
+            <div>
+              <label className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] block mb-2">ROOM CODE</label>
+              <input type="text" value={code} onChange={(e) => { setCode(e.target.value.toUpperCase()); setError(""); }}
+                placeholder="e.g. AB3-XY9" maxLength={7} autoFocus={!!prefillCode}
+                className="w-full bg-[#0d1117] border border-border text-[#f0a500] font-mono text-[18px] px-4 py-3 focus:outline-none focus:border-[#f0a500]/60 placeholder-[#2a3444] tracking-[0.2em] text-center" />
+              {error && <p className="font-mono text-[10px] text-[#ff3333] mt-1.5">{error}</p>}
+            </div>
+            <button type="submit" disabled={busy}
+              className="w-full py-3.5 bg-[#f0a500] text-black font-black text-[14px] tracking-[0.2em] hover:bg-[#f0b800] transition-colors disabled:opacity-50">
+              {busy ? "CONNECTING..." : "ENTER THE MARKET"}
+            </button>
+          </form>
+        )}
+
+        {mode === "host" && (
+          <form onSubmit={handleHost} className="space-y-4">
+            <div>
+              <label className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] block mb-2">ROOM NAME (OPTIONAL)</label>
+              <input type="text" value={roomName} onChange={(e) => setRoomName(e.target.value)}
+                placeholder="e.g. Friday Night Session" maxLength={30}
+                className="w-full bg-[#0d1117] border border-border text-[#d8d0c4] font-mono text-[13px] px-4 py-3 focus:outline-none focus:border-[#f0a500]/60 placeholder-[#2a3444]" />
+            </div>
+            <div className="flex items-center gap-3 px-4 py-3 border border-border bg-[#0d1117] cursor-pointer" onClick={() => setIsPublic(!isPublic)}>
+              <div className={`w-4 h-4 border flex items-center justify-center transition-colors ${isPublic ? "border-[#f0a500] bg-[#f0a500]" : "border-border"}`}>
+                {isPublic && <div className="w-2 h-2 bg-black" />}
+              </div>
+              <div>
+                <div className="font-mono text-[11px] text-[#d8d0c4]">LIST IN PUBLIC ROOM BROWSER</div>
+                <div className="font-mono text-[9px] text-[#5c6878]">Anyone can find and join this room without a code</div>
+              </div>
+            </div>
+            {error && <p className="font-mono text-[10px] text-[#ff3333]">{error}</p>}
+            <button type="submit" disabled={busy}
+              className="w-full py-3.5 bg-[#ff3333]/10 border border-[#ff3333]/40 text-[#ff3333] font-black text-[13px] tracking-[0.2em] hover:bg-[#ff3333]/20 transition-colors disabled:opacity-50">
+              {busy ? "OPENING ROOM..." : "HOST A NEW GAME"}
+            </button>
+          </form>
+        )}
+
+        <div className="text-center mt-6">
+          <button onClick={onSignOut} className="font-mono text-[9px] tracking-widest text-[#2a3444] hover:text-[#5c6878] transition-colors">SIGN OUT</button>
         </div>
       </div>
     </div>
@@ -255,65 +568,117 @@ function AuthShell({ children }: { children: React.ReactNode }) {
 // ─── Auth: sign up / log in ─────────────────────────────────────────────────────
 
 function AuthScreen({
-  onSignUp, onSignIn,
-}: { onSignUp: (email: string, password: string) => Promise<boolean>; onSignIn: (email: string, password: string) => Promise<void> }) {
-  const [mode, setMode] = useState<"signup" | "login">("signup");
-  const [email, setEmail] = useState("");
+  onSignUp, onSignIn, onForgotPassword, pendingEmail, onResendConfirmation,
+}: {
+  onSignUp: (email: string, password: string) => Promise<boolean>;
+  onSignIn: (email: string, password: string) => Promise<void>;
+  onForgotPassword: (email: string) => Promise<void>;
+  pendingEmail: string | null;
+  onResendConfirmation: (email: string) => Promise<void>;
+}) {
+  const [mode, setMode] = useState<"signup" | "login" | "forgot">(pendingEmail ? "login" : "signup");
+  const [email, setEmail] = useState(pendingEmail ?? "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [checkEmail, setCheckEmail] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [checkEmail, setCheckEmail] = useState(!!pendingEmail);
+  const [pendingConfirmEmail, setPendingConfirmEmail] = useState(pendingEmail ?? "");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
-    setError("");
+    setBusy(true); setError("");
     try {
       if (mode === "signup") {
         const loggedIn = await onSignUp(email, password);
-        if (!loggedIn) setCheckEmail(true);
+        if (!loggedIn) {
+          localStorage.setItem("bm_pending_confirm", email);
+          setPendingConfirmEmail(email);
+          setCheckEmail(true);
+        }
       } else {
         await onSignIn(email, password);
+        localStorage.removeItem("bm_pending_confirm");
       }
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   }
 
+  async function handleForgot(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setError("");
+    try { await onForgotPassword(email); setForgotSent(true); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  }
+
   if (checkEmail) {
     return (
-      <AuthShell>
-        <div className="text-center font-mono text-[12px] text-[#00e676] border border-[#00e676]/30 bg-[#00e676]/5 p-4">
-          Check your email to confirm your account, then log in.
-        </div>
-      </AuthShell>
+      <CheckEmailScreen
+        email={pendingConfirmEmail}
+        onResend={() => onResendConfirmation(pendingConfirmEmail)}
+        onBack={() => { setCheckEmail(false); setMode("login"); localStorage.removeItem("bm_pending_confirm"); }}
+      />
     );
   }
 
   return (
     <AuthShell>
-      <div className="flex border border-border mb-6">
-        <button onClick={() => { setMode("signup"); setError(""); }} className={`flex-1 py-2.5 font-mono text-[10px] tracking-widest transition-colors ${mode === "signup" ? "bg-[#f0a500]/10 text-[#f0a500] border-r border-[#f0a500]/20" : "text-[#5c6878] border-r border-border hover:text-[#d8d0c4]"}`}>
-          <UserPlus size={10} className="inline mr-1.5" />SIGN UP
-        </button>
-        <button onClick={() => { setMode("login"); setError(""); }} className={`flex-1 py-2.5 font-mono text-[10px] tracking-widest transition-colors ${mode === "login" ? "bg-[#06b6d4]/10 text-[#06b6d4]" : "text-[#5c6878] hover:text-[#d8d0c4]"}`}>
-          <Settings size={10} className="inline mr-1.5" />LOG IN
-        </button>
-      </div>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] block mb-2">EMAIL</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus
-            className="w-full bg-[#0d1117] border border-border text-[#d8d0c4] font-mono text-[14px] px-4 py-3 focus:outline-none focus:border-[#f0a500]/60" />
+      {mode !== "forgot" && (
+        <div className="flex border border-border mb-6">
+          <button onClick={() => { setMode("signup"); setError(""); }} className={`flex-1 py-2.5 font-mono text-[10px] tracking-widest transition-colors border-r border-border ${mode === "signup" ? "bg-[#f0a500]/10 text-[#f0a500] border-[#f0a500]/20" : "text-[#5c6878] hover:text-[#d8d0c4]"}`}>
+            <UserPlus size={10} className="inline mr-1.5" />SIGN UP
+          </button>
+          <button onClick={() => { setMode("login"); setError(""); }} className={`flex-1 py-2.5 font-mono text-[10px] tracking-widest transition-colors ${mode === "login" ? "bg-[#06b6d4]/10 text-[#06b6d4]" : "text-[#5c6878] hover:text-[#d8d0c4]"}`}>
+            <Settings size={10} className="inline mr-1.5" />LOG IN
+          </button>
         </div>
-        <div>
-          <label className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] block mb-2">PASSWORD</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6}
-            className="w-full bg-[#0d1117] border border-border text-[#d8d0c4] font-mono text-[14px] px-4 py-3 focus:outline-none focus:border-[#f0a500]/60" />
-          {error && <p className="font-mono text-[10px] text-[#ff3333] mt-1.5">{error}</p>}
-        </div>
-        <button type="submit" disabled={busy} className="w-full py-3.5 bg-[#f0a500] text-black font-black text-[14px] tracking-[0.2em] hover:bg-[#f0b800] transition-colors disabled:opacity-50" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-          {busy ? "..." : mode === "signup" ? "CREATE ACCOUNT" : "LOG IN"}
-        </button>
-      </form>
+      )}
+
+      {mode === "forgot" ? (
+        <form onSubmit={handleForgot} className="space-y-4">
+          <div className="text-center mb-2">
+            <div className="font-mono text-[11px] tracking-[0.3em] text-[#f0a500] mb-1">FORGOT PASSWORD</div>
+            <div className="font-mono text-[10px] text-[#5c6878]">Enter your email and we'll send a reset link.</div>
+          </div>
+          <div>
+            <label className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] block mb-2">EMAIL</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus
+              className="w-full bg-[#0d1117] border border-border text-[#d8d0c4] font-mono text-[14px] px-4 py-3 focus:outline-none focus:border-[#f0a500]/60" />
+            {error && <p className="font-mono text-[10px] text-[#ff3333] mt-1.5">{error}</p>}
+            {forgotSent && <p className="font-mono text-[10px] text-[#00e676] mt-1.5">✓ Reset email sent — check your inbox</p>}
+          </div>
+          <button type="submit" disabled={busy || forgotSent}
+            className="w-full py-3.5 bg-[#f0a500] text-black font-black text-[14px] tracking-[0.2em] hover:bg-[#f0b800] transition-colors disabled:opacity-50">
+            {busy ? "SENDING..." : forgotSent ? "EMAIL SENT ✓" : "SEND RESET EMAIL"}
+          </button>
+          <button type="button" onClick={() => { setMode("login"); setError(""); setForgotSent(false); }}
+            className="w-full font-mono text-[10px] text-[#2a3444] hover:text-[#5c6878] transition-colors">
+            ← BACK TO LOGIN
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] block mb-2">EMAIL</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus
+              className="w-full bg-[#0d1117] border border-border text-[#d8d0c4] font-mono text-[14px] px-4 py-3 focus:outline-none focus:border-[#f0a500]/60" />
+          </div>
+          <div>
+            <label className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] block mb-2">PASSWORD</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6}
+              className="w-full bg-[#0d1117] border border-border text-[#d8d0c4] font-mono text-[14px] px-4 py-3 focus:outline-none focus:border-[#f0a500]/60" />
+            {error && <p className="font-mono text-[10px] text-[#ff3333] mt-1.5">{error}</p>}
+          </div>
+          <button type="submit" disabled={busy}
+            className="w-full py-3.5 bg-[#f0a500] text-black font-black text-[14px] tracking-[0.2em] hover:bg-[#f0b800] transition-colors disabled:opacity-50" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            {busy ? "..." : mode === "signup" ? "CREATE ACCOUNT" : "LOG IN"}
+          </button>
+          {mode === "login" && (
+            <button type="button" onClick={() => { setMode("forgot"); setError(""); }}
+              className="w-full font-mono text-[10px] text-[#2a3444] hover:text-[#5c6878] transition-colors">
+              FORGOT PASSWORD?
+            </button>
+          )}
+        </form>
+      )}
     </AuthShell>
   );
 }
@@ -346,78 +711,6 @@ function ProfileSetupScreen({ onComplete }: { onComplete: (handle: string) => Pr
           {busy ? "SAVING..." : "CONTINUE"}
         </button>
       </form>
-    </AuthShell>
-  );
-}
-
-// ─── Room Gate: host a new game or join one by code ────────────────────────────
-
-function RoomGate({
-  prefillCode, onHost, onJoin, onSignOut,
-}: { prefillCode: string | null; onHost: () => Promise<void>; onJoin: (code: string) => Promise<void>; onSignOut: () => Promise<void> }) {
-  const [mode, setMode] = useState<"join" | "host">(prefillCode ? "join" : "host");
-  const [code, setCode] = useState(prefillCode ?? "");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function handleHost() {
-    setBusy(true);
-    setError("");
-    try { await onHost(); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
-  }
-
-  async function handleJoin(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError("");
-    try { await onJoin(code); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
-  }
-
-  return (
-    <AuthShell>
-      <div className="flex border border-border mb-6">
-        <button onClick={() => { setMode("join"); setError(""); }} className={`flex-1 py-2.5 font-mono text-[10px] tracking-widest transition-colors ${mode === "join" ? "bg-[#f0a500]/10 text-[#f0a500] border-r border-[#f0a500]/20" : "text-[#5c6878] border-r border-border hover:text-[#d8d0c4]"}`}>
-          <UserPlus size={10} className="inline mr-1.5" />JOIN WITH CODE
-        </button>
-        <button onClick={() => { setMode("host"); setError(""); }} className={`flex-1 py-2.5 font-mono text-[10px] tracking-widest transition-colors ${mode === "host" ? "bg-[#ff3333]/10 text-[#ff3333]" : "text-[#5c6878] hover:text-[#d8d0c4]"}`}>
-          <Settings size={10} className="inline mr-1.5" />HOST A NEW GAME
-        </button>
-      </div>
-
-      {mode === "join" ? (
-        <form onSubmit={handleJoin} className="space-y-4">
-          <div>
-            <label className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] block mb-2">ROOM CODE</label>
-            <input type="text" value={code} onChange={(e) => { setCode(e.target.value.toUpperCase()); setError(""); }}
-              placeholder="e.g. AB3-XY9" maxLength={7} autoFocus
-              className="w-full bg-[#0d1117] border border-border text-[#f0a500] font-mono text-[18px] px-4 py-3 focus:outline-none focus:border-[#f0a500]/60 placeholder-[#2a3444] tracking-[0.2em] text-center" />
-            {error && <p className="font-mono text-[10px] text-[#ff3333] mt-1.5">{error}</p>}
-          </div>
-          <button type="submit" disabled={busy} className="w-full py-3.5 bg-[#f0a500] text-black font-black text-[14px] tracking-[0.2em] hover:bg-[#f0b800] transition-colors disabled:opacity-50" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-            {busy ? "CONNECTING..." : "ENTER THE MARKET"}
-          </button>
-          <p className="font-mono text-[9px] text-[#2a3444] text-center tracking-widest">ASK YOUR HOST FOR THE ROOM CODE OR INVITE LINK</p>
-        </form>
-      ) : (
-        <div className="space-y-4">
-          <div className="bg-[#0d1117] border border-border p-3">
-            <div className="font-mono text-[9px] text-[#5c6878] tracking-widest mb-2">HOSTING GIVES YOU</div>
-            <div className="grid grid-cols-1 gap-2">
-              {["A fresh, private room with its own code", "Full admin control over events & objectives", "A link you can share with your players"].map((item) => (
-                <div key={item} className="flex items-center gap-1.5 font-mono text-[10px] text-[#d8d0c4]"><span className="text-[#00e676]">✓</span> {item}</div>
-              ))}
-            </div>
-          </div>
-          {error && <p className="font-mono text-[10px] text-[#ff3333]">{error}</p>}
-          <button onClick={handleHost} disabled={busy} className="w-full py-3.5 bg-[#ff3333]/10 border border-[#ff3333]/40 text-[#ff3333] font-black text-[13px] tracking-[0.2em] hover:bg-[#ff3333]/20 transition-colors disabled:opacity-50" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-            {busy ? "OPENING ROOM..." : "HOST A NEW GAME"}
-          </button>
-        </div>
-      )}
-
-      <div className="text-center mt-6">
-        <button onClick={onSignOut} className="font-mono text-[9px] tracking-widest text-[#2a3444] hover:text-[#5c6878] transition-colors">SIGN OUT</button>
-      </div>
     </AuthShell>
   );
 }
@@ -925,7 +1218,12 @@ function OpsTab({
   );
 }
 
-function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; onLogout: () => void }) {
+function Game({ conn, onLogout, soundsOn, onToggleSounds }: {
+  conn: ReturnType<typeof useGameConnection>;
+  onLogout: () => void;
+  soundsOn: boolean;
+  onToggleSounds: () => void;
+}) {
   const { game, players, marketItems, rumors, purchasedRumorIds, events, auction, inventory, contracts, bounties, myLoan, me, buy, sell, buyRumor, bid, acceptContract, cancelContract, completeContract, placeBounty, targetBlackout, pumpItem, takeLoan, repayLoan, assassinatePlayer } = conn;
   const [tab, setTab] = useState<Tab>("MARKET");
   const [selectedId, setSelectedId] = useState<string>("gold");
@@ -937,6 +1235,14 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
   const notifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+
+  // COLLAPSE tick sound — fires every second during the last 90s
+  useEffect(() => {
+    if (phase !== "COLLAPSE") return;
+    Sounds.playCollapseTick();
+    const t = setInterval(() => Sounds.playCollapseTick(), 2000);
+    return () => clearInterval(t);
+  }, [phase]);
 
   const notify = useCallback((msg: string) => {
     setNotification(msg);
@@ -965,13 +1271,13 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
 
   async function handleBuy() {
     if (!selectedItem) return;
-    try { await buy(selectedItem.id, buyQty); notify(`✓ PURCHASED ${buyQty}× ${selectedItem.name} for ${fmt(selectedItem.price * buyQty)}`); }
+    try { await buy(selectedItem.id, buyQty); Sounds.playBuy(); notify(`✓ PURCHASED ${buyQty}× ${selectedItem.name} for ${fmt(selectedItem.price * buyQty)}`); }
     catch (e) { notify(`✗ ${(e as Error).message}`); }
   }
   async function handleSell(itemId: string) {
     const inv = inventory.find((i) => i.item_id === itemId);
     if (!inv) return;
-    try { await sell(itemId); notify(`✓ SOLD ${inv.qty}× ${itemMeta(itemId).name}`); }
+    try { await sell(itemId); Sounds.playSell(); notify(`✓ SOLD ${inv.qty}× ${itemMeta(itemId).name}`); }
     catch (e) { notify(`✗ ${(e as Error).message}`); }
   }
   async function handleBuyRumor(rumorId: string) {
@@ -981,7 +1287,7 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
   async function handleBid() {
     const amount = parseInt(bidInput, 10);
     if (isNaN(amount)) { notify("✗ ENTER A VALID BID"); return; }
-    try { await bid(amount); setBidInput(""); notify(`✓ BID PLACED — ${fmt(amount)}`); }
+    try { await bid(amount); Sounds.playBid(); setBidInput(""); notify(`✓ BID PLACED — ${fmt(amount)}`); }
     catch (e) { notify(`✗ ${(e as Error).message}`); }
   }
   async function handlePlaceBounty(targetId: string, amount: number) {
@@ -1034,8 +1340,13 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
     return acc + (mkt ? mkt.price * inv.qty : inv.avg_buy * inv.qty);
   }, 0);
   const netWorth = cash + portfolioValue; // locally responsive estimate for my own HUD
-  const sortedPlayers = [...players].sort((a, b) => b.net_worth - a.net_worth);
-  const myRank = sortedPlayers.findIndex((p) => p.id === me.id) + 1;
+  // Filter admins BEFORE sort so myRank is computed correctly (admin was
+  // previously included in the sort, pushing everyone's rank off by 1).
+  const nonAdminPlayers = players.filter((p) => !p.is_admin);
+  const sortedPlayers = [...nonAdminPlayers].sort(
+    (a, b) => b.net_worth - a.net_worth || b.trade_count - a.trade_count || a.handle.localeCompare(b.handle)
+  );
+  const myRank = me.is_admin ? 0 : sortedPlayers.findIndex((p) => p.id === me.id) + 1;
 
   const isFrozen = !!(me.frozen_until && new Date(me.frozen_until).getTime() > now);
   const isPersonalBlackout = !!(me.player_blackout_until && new Date(me.player_blackout_until).getTime() > now);
@@ -1115,6 +1426,9 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
         </button>
         <div className="px-3 py-2.5 border-l border-border shrink-0"><div className="font-mono text-[9px] text-[#5c6878] tracking-widest">ROOM</div><div className="font-mono text-[11px] font-bold text-[#5c6878] tracking-[0.15em]">{formatCode(game.code)}</div></div>
         <div className="px-4 py-2.5 border-l border-border shrink-0"><div className="font-mono text-[9px] text-[#5c6878] tracking-widest">OPERATOR</div><div className="font-mono text-[11px] font-bold text-[#d8d0c4]">{me.handle}</div></div>
+        <button onClick={onToggleSounds} className="px-3 py-2.5 border-l border-border font-mono text-[9px] text-[#5c6878] hover:text-[#d8d0c4] transition-colors tracking-widest" title={soundsOn ? "Mute sounds" : "Enable sounds"}>
+          {soundsOn ? "🔊" : "🔇"}
+        </button>
         <button onClick={onLogout} className="px-3 py-2.5 border-l border-border font-mono text-[9px] text-[#5c6878] hover:text-[#ff3333] transition-colors tracking-widest">EXIT</button>
         <button onClick={() => conn.signOut()} className="px-3 py-2.5 border-l border-border font-mono text-[9px] text-[#5c6878] hover:text-[#ff3333] transition-colors tracking-widest">SIGN OUT</button>
       </header>
@@ -1332,7 +1646,7 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
               <div className="font-mono text-[9px] text-[#5c6878] tracking-[0.3em] mb-4 flex items-center gap-2"><Users size={9} />LEADERBOARD — OBJECTIVES NEVER REVEALED</div>
               <div className="border border-border overflow-hidden">
                 <div className="grid grid-cols-6 bg-[#0d1117] border-b border-border px-4 py-2">{["RANK", "HANDLE", "NET WORTH", "CASH", "REP", "TRADES"].map((h) => <div key={h} className="font-mono text-[9px] text-[#5c6878] tracking-widest">{h}</div>)}</div>
-                {sortedPlayers.filter((p) => !p.is_admin).map((p, idx) => {
+                {sortedPlayers.map((p, idx) => {
                   const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : null;
                   const hasBounty = conn.bounties.some((b) => b.target_id === p.id && b.status === "active");
                   return (
@@ -1458,7 +1772,19 @@ function Game({ conn, onLogout }: { conn: ReturnType<typeof useGameConnection>; 
 
 export default function App() {
   const conn = useGameConnection();
-  const { authReady, session, profile, error, game, me, prefillCode } = conn;
+  const { authReady, session, profile, error, game, me, prefillCode,
+          passwordRecoveryMode, publicRooms } = conn;
+
+  // Onboarding overlay — shown once per browser after profile is set up
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  useEffect(() => {
+    if (profile && !game && !localStorage.getItem(ONBOARDING_KEY)) {
+      setShowOnboarding(true);
+    }
+  }, [profile, game]);
+
+  // Sounds toggle (header button wires to this)
+  const [soundsOn, setSoundsOn] = useState(Sounds.soundsEnabled());
 
   if (error) {
     return (
@@ -1473,8 +1799,24 @@ export default function App() {
 
   if (!authReady) return <LoadingScreen label="CONNECTING TO THE BLACK MARKET..." />;
 
+  // Password recovery (after clicking email reset link)
+  if (passwordRecoveryMode) {
+    return <ResetPasswordScreen onReset={conn.updatePassword} />;
+  }
+
   if (!session) {
-    return <AuthScreen onSignUp={conn.signUp} onSignIn={conn.signIn} />;
+    return (
+      <AuthScreen
+        onSignUp={async (email, password) => {
+          const result = await conn.signUp(email, password);
+          return result as unknown as boolean;
+        }}
+        onSignIn={conn.signIn}
+        onForgotPassword={conn.requestPasswordReset}
+        pendingEmail={localStorage.getItem("bm_pending_confirm")}
+        onResendConfirmation={conn.resendConfirmation}
+      />
+    );
   }
 
   if (!profile) {
@@ -1483,12 +1825,17 @@ export default function App() {
 
   if (!game || !me) {
     return (
-      <RoomGate
-        prefillCode={prefillCode}
-        onHost={async () => { await conn.hostRoom(); }}
-        onJoin={async (code) => { await conn.enterRoom(code); }}
-        onSignOut={conn.signOut}
-      />
+      <>
+        {showOnboarding && <OnboardingScreen onComplete={() => setShowOnboarding(false)} />}
+        <RoomBrowserScreen
+          prefillCode={prefillCode}
+          publicRooms={publicRooms}
+          onHost={async (isPublic, name) => { await conn.hostRoom(isPublic, name); }}
+          onJoin={async (code) => { await conn.enterRoom(code); }}
+          onSignOut={conn.signOut}
+          onRefreshRooms={conn.refreshPublicRooms}
+        />
+      </>
     );
   }
 
@@ -1527,5 +1874,16 @@ export default function App() {
     return <LobbyScreen code={game.code} handle={me.handle} players={conn.players} onLeave={conn.leaveGame} onSignOut={conn.signOut} />;
   }
 
-  return <Game conn={conn} onLogout={conn.leaveGame} />;
+  return (
+    <>
+      <Game conn={conn} onLogout={conn.leaveGame}
+        soundsOn={soundsOn}
+        onToggleSounds={() => {
+          const next = !soundsOn;
+          setSoundsOn(next);
+          Sounds.setSoundsEnabled(next);
+        }}
+      />
+    </>
+  );
 }
