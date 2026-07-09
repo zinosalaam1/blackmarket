@@ -10,6 +10,49 @@ import {
 import { useGameConnection } from "../lib/useGameConnection";
 import type { ContractRow, MarketItemRow, PlayerRow, PublicRoomRow, RumorRow } from "../lib/types";
 import * as Sounds from "../lib/sounds";
+import React from "react";
+
+// ─── Error Boundary ─────────────────────────────────────────────────────────
+// Catches render-time crashes anywhere below it and shows a readable error
+// screen instead of a blank white/black screen (the previous failure mode
+// on mobile WebViews, which have no visible dev console).
+
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    // eslint-disable-next-line no-console
+    console.error("Render crash caught by ErrorBoundary:", error, info.componentStack);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="size-full flex items-center justify-center bg-background p-6" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+          <div className="max-w-md text-center">
+            <div className="text-4xl mb-3">⚠️</div>
+            <div className="font-mono text-[13px] text-[#ff3333] mb-2 tracking-widest">SOMETHING WENT WRONG</div>
+            <div className="font-mono text-[10px] text-[#5c6878] mb-4 break-words">{this.state.error.message}</div>
+            <button
+              onClick={() => { this.setState({ error: null }); window.location.href = window.location.pathname; }}
+              className="px-4 py-2 border border-[#f0a500]/40 text-[#f0a500] font-mono text-[11px] tracking-widest hover:bg-[#f0a500]/10 transition-colors"
+            >
+              RELOAD
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ─── Static, purely-cosmetic catalog (icons + secret-objective flavor text).
 // Gameplay-relevant numbers (price, tier, cash, etc.) always come from the
@@ -106,7 +149,8 @@ function LoadingScreen({ label }: { label: string }) {
 
 // ─── Signup Screen ────────────────────────────────────────────────────────────
 
-function formatCode(code: string) {
+function formatCode(code: string | null | undefined) {
+  if (!code) return "------";
   return code.length === 6 ? `${code.slice(0, 3)}-${code.slice(3)}` : code;
 }
 
@@ -1770,10 +1814,10 @@ function Game({ conn, onLogout, soundsOn, onToggleSounds }: {
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
-export default function App() {
+function AppInner() {
   const conn = useGameConnection();
   const { authReady, session, profile, error, game, me, prefillCode,
-          passwordRecoveryMode, publicRooms } = conn;
+          passwordRecoveryMode, publicRooms, roomLoading } = conn;
 
   // Onboarding overlay — shown once per browser after profile is set up
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -1821,6 +1865,13 @@ export default function App() {
 
   if (!profile) {
     return <ProfileSetupScreen onComplete={conn.completeProfile} />;
+  }
+
+  // Actively joining/hosting a room — show a spinner instead of letting the
+  // room-browser flash back up mid-transition (this was the main blank-
+  // screen cause: the UI had no state for "request sent, room not loaded yet").
+  if (roomLoading) {
+    return <LoadingScreen label="ENTERING THE MARKET..." />;
   }
 
   if (!game || !me) {
@@ -1875,15 +1926,21 @@ export default function App() {
   }
 
   return (
-    <>
-      <Game conn={conn} onLogout={conn.leaveGame}
-        soundsOn={soundsOn}
-        onToggleSounds={() => {
-          const next = !soundsOn;
-          setSoundsOn(next);
-          Sounds.setSoundsEnabled(next);
-        }}
-      />
-    </>
+    <Game conn={conn} onLogout={conn.leaveGame}
+      soundsOn={soundsOn}
+      onToggleSounds={() => {
+        const next = !soundsOn;
+        setSoundsOn(next);
+        Sounds.setSoundsEnabled(next);
+      }}
+    />
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppInner />
+    </ErrorBoundary>
   );
 }

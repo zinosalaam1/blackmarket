@@ -26,6 +26,7 @@ export function useGameConnection() {
   const [prefillCode, setPrefillCode] = useState<string | null>(null);
   const [passwordRecoveryMode, setPasswordRecoveryMode] = useState(false);
   const [publicRooms, setPublicRooms] = useState<import("./types").PublicRoomRow[]>([]);
+  const [roomLoading, setRoomLoading] = useState(false);
 
   const [game, setGame] = useState<GameRow | null>(null);
   const [players, setPlayers] = useState<PlayerRow[]>([]);
@@ -436,25 +437,37 @@ export function useGameConnection() {
   }, []);
 
   const hostRoom = useCallback(async (isPublic = false, roomName?: string) => {
-    const g = await api.createRoom(isPublic, roomName);
-    localStorage.setItem(ROOM_CODE_KEY, g.code);
-    await loadRoom(g.id);
-    return g;
+    setRoomLoading(true);
+    try {
+      const g = await api.createRoom(isPublic, roomName);
+      localStorage.setItem(ROOM_CODE_KEY, g.code ?? "");
+      await loadRoom(g.id);
+      return g;
+    } finally {
+      setRoomLoading(false);
+    }
   }, [loadRoom]);
 
-  return {
-    authReady, session, profile, error, prefillCode,
-    passwordRecoveryMode, publicRooms,
-    game, players: players_, marketItems, rumors, purchasedRumorIds,
-    events, auction, inventory, contracts, bounties, myLoan, me,
-    signUp, signIn, signOut, completeProfile,
-    requestPasswordReset, updatePassword, resendConfirmation,
-    refreshPublicRooms, hostRoom, enterRoom: async (code: string) => {
+  const enterRoom = useCallback(async (code: string) => {
+    setRoomLoading(true);
+    try {
       const p = await api.joinRoom(code);
       localStorage.setItem(ROOM_CODE_KEY, code.toUpperCase().trim());
       await loadRoom(p.game_id);
       return p;
-    },
+    } finally {
+      setRoomLoading(false);
+    }
+  }, [loadRoom]);
+
+  return {
+    authReady, session, profile, error, prefillCode,
+    passwordRecoveryMode, publicRooms, roomLoading,
+    game, players: players_, marketItems, rumors, purchasedRumorIds,
+    events, auction, inventory, contracts, bounties, myLoan, me,
+    signUp, signIn, signOut, completeProfile,
+    requestPasswordReset, updatePassword, resendConfirmation,
+    refreshPublicRooms, hostRoom, enterRoom,
     leaveGame, resetGame,
     startGame, addNpc, updatePlayerObjective, removePlayer,
     autoAssignObjectives, triggerEvent, buy, sell, buyRumor, bid,
