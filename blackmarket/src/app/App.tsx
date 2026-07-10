@@ -1278,6 +1278,12 @@ function Game({ conn, onLogout, soundsOn, onToggleSounds }: {
   const [now, setNow] = useState(() => Date.now());
   const notifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Computed before the early-return guard below (hooks can't follow a
+  // conditional return), and again re-derived after it once `game` is
+  // known non-null — this first pass only needs to exist so the
+  // COLLAPSE-tick effect's dependency array has something defined to read.
+  const phase = game?.phase;
+
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
 
   // COLLAPSE tick sound — fires every second during the last 90s
@@ -1305,7 +1311,6 @@ function Game({ conn, onLogout, soundsOn, onToggleSounds }: {
   const remainingSec = Math.max(0, Math.round(game.duration_seconds - (now - startedAtMs) / 1000));
   const mins = Math.floor(remainingSec / 60);
   const secs = remainingSec % 60;
-  const phase = game.phase;
   const phaseColor = phase === "COLLAPSE" ? "#ff3333" : phase === "FINAL PHASE" ? "#f0a500" : "#00e676";
 
   const selectedItem = marketItems.find((i) => i.id === selectedId) ?? marketItems[0];
