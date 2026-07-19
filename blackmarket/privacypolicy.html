@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — The Black Market</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EDEAE1;
+    --paper-dark:#E2DDD0;
+    --ink:#1C1B19;
+    --ink-soft:#4A473F;
+    --stamp-red:#A8352C;
+    --kraft:#9C7A4A;
+    --kraft-dark:#7A5F39;
+    --line:#C9C2AE;
+    --highlight:#D8CFA9;
+    --max-w:760px;
+  }
+
+  *{box-sizing:border-box;}
+
+  html{scroll-behavior:smooth;}
+
+  body{
+    margin:0;
+    background:var(--paper-dark);
+    color:var(--ink);
+    font-family:'Source Serif 4', Georgia, serif;
+    font-size:17px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* subtle paper texture via layered gradients */
+  body{
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(0,0,0,0.02) 0, transparent 40%),
+      radial-gradient(circle at 80% 90%, rgba(0,0,0,0.03) 0, transparent 45%);
+  }
+
+  .wrap{
+    max-width: calc(var(--max-w) + 220px);
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* ============ HEADER / FILE JACKET ============ */
+  header.jacket{
+    background:var(--ink);
+    color:var(--paper);
+    padding:64px 24px 96px;
+    position:relative;
+    overflow:hidden;
+  }
+  header.jacket::after{
+    content:"";
+    position:absolute;
+    left:0; right:0; bottom:0;
+    height:28px;
+    background:linear-gradient(var(--paper-dark), var(--paper-dark));
+    clip-path: polygon(0 100%, 100% 100%, 100% 0, 98% 40%, 96% 4%, 94% 55%, 92% 10%, 90% 45%, 88% 2%, 86% 50%, 84% 8%, 82% 60%, 80% 15%, 78% 45%, 76% 5%, 74% 55%, 72% 12%, 70% 40%, 68% 0, 66% 50%, 64% 10%, 62% 45%, 60% 5%, 58% 55%, 56% 15%, 54% 40%, 52% 8%, 50% 50%, 48% 4%, 46% 45%, 44% 12%, 42% 55%, 40% 5%, 38% 50%, 36% 8%, 34% 45%, 32% 0, 30% 55%, 28% 15%, 26% 40%, 24% 5%, 22% 50%, 20% 10%, 18% 45%, 16% 2%, 14% 55%, 12% 12%, 10% 40%, 8% 5%, 6% 50%, 4% 8%, 2% 45%, 0 100%);
+  }
+
+  .jacket-inner{
+    max-width: calc(var(--max-w) + 220px);
+    margin:0 auto;
+    position:relative;
+  }
+
+  .case-meta{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:#B7B2A3;
+    display:flex;
+    gap:28px;
+    flex-wrap:wrap;
+    margin-bottom:40px;
+    border-bottom:1px solid #3A382F;
+    padding-bottom:18px;
+  }
+  .case-meta span b{color:var(--paper);font-weight:500;}
+
+  .title-block{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:32px;
+    flex-wrap:wrap;
+  }
+
+  h1.doc-title{
+    font-family:'Special Elite', 'IBM Plex Mono', monospace;
+    font-size:clamp(2.1rem, 5vw, 3.2rem);
+    line-height:1.15;
+    margin:0;
+    font-weight:400;
+    letter-spacing:.01em;
+  }
+  h1.doc-title .app-name{
+    display:block;
+    color:var(--stamp-red);
+    font-size:0.42em;
+    letter-spacing:.28em;
+    text-transform:uppercase;
+    margin-bottom:14px;
+    font-family:'IBM Plex Mono', monospace;
+  }
+
+  .stamp{
+    flex-shrink:0;
+    border:3px solid var(--stamp-red);
+    color:var(--stamp-red);
+    font-family:'Special Elite', monospace;
+    font-size:13px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    padding:10px 16px;
+    transform:rotate(-6deg);
+    border-radius:4px;
+    opacity:.92;
+    white-space:nowrap;
+    background:rgba(168,53,44,0.06);
+  }
+
+  .subline{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13.5px;
+    color:#C9C4B4;
+    margin-top:22px;
+    max-width:56ch;
+    line-height:1.7;
+  }
+
+  /* ============ LAYOUT: TABS + CONTENT ============ */
+  main.body-wrap{
+    background:var(--paper);
+    display:grid;
+    grid-template-columns:210px 1fr;
+    gap:0;
+    max-width: calc(var(--max-w) + 220px);
+    margin:0 auto;
+    position:relative;
+  }
+
+  nav.tabs{
+    position:sticky;
+    top:0;
+    align-self:start;
+    padding:56px 18px 56px 24px;
+    border-right:1px solid var(--line);
+  }
+  nav.tabs .tabs-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10.5px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--kraft-dark);
+    margin-bottom:16px;
+    padding-left:2px;
+  }
+  nav.tabs a{
+    display:block;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    text-decoration:none;
+    padding:9px 10px 9px 14px;
+    margin-bottom:3px;
+    border-left:2px solid transparent;
+    line-height:1.4;
+    transition:all .15s ease;
+  }
+  nav.tabs a:hover, nav.tabs a:focus-visible{
+    color:var(--stamp-red);
+    border-left-color:var(--stamp-red);
+    background:rgba(168,53,44,0.06);
+    outline:none;
+  }
+  nav.tabs a b{
+    color:var(--kraft-dark);
+    font-weight:600;
+    margin-right:6px;
+  }
+
+  article{
+    padding:56px 44px 90px 48px;
+  }
+
+  section{
+    margin-bottom:52px;
+    scroll-margin-top:24px;
+  }
+  section:last-of-type{margin-bottom:0;}
+
+  .sec-num{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--stamp-red);
+    letter-spacing:.12em;
+    display:block;
+    margin-bottom:6px;
+  }
+
+  h2{
+    font-family:'Special Elite', monospace;
+    font-weight:400;
+    font-size:1.5rem;
+    margin:0 0 18px;
+    color:var(--ink);
+    letter-spacing:.01em;
+  }
+
+  h3{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:14px;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    color:var(--kraft-dark);
+    margin:26px 0 10px;
+    font-weight:600;
+  }
+
+  p{margin:0 0 16px;color:var(--ink-soft);}
+  p:last-child{margin-bottom:0;}
+
+  strong{color:var(--ink);font-weight:600;}
+
+  ul{margin:0 0 16px;padding-left:0;list-style:none;}
+  li{
+    position:relative;
+    padding-left:22px;
+    margin-bottom:10px;
+    color:var(--ink-soft);
+  }
+  li::before{
+    content:"—";
+    position:absolute;
+    left:0;
+    color:var(--kraft);
+  }
+
+  a.inline{color:var(--stamp-red);text-decoration-color:rgba(168,53,44,0.35);text-underline-offset:3px;}
+  a.inline:hover{text-decoration-color:var(--stamp-red);}
+
+  .redact-rule{
+    border:none;
+    height:10px;
+    margin:0 0 52px;
+    background-image:repeating-linear-gradient(90deg, var(--ink) 0, var(--ink) 22px, transparent 22px, transparent 30px);
+    opacity:.85;
+  }
+
+  .placeholder{
+    background:var(--highlight);
+    color:var(--ink);
+    padding:1px 6px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:.86em;
+    border-radius:2px;
+    white-space:nowrap;
+  }
+
+  .callout{
+    background:var(--paper-dark);
+    border-left:3px solid var(--kraft);
+    padding:18px 20px;
+    margin:0 0 16px;
+    font-size:15.5px;
+  }
+  .callout p{margin:0 0 10px;}
+  .callout p:last-child{margin:0;}
+  .callout-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--kraft-dark);
+    display:block;
+    margin-bottom:8px;
+  }
+
+  .no-collect{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    color:var(--ink-soft);
+  }
+  .no-collect .x{color:var(--stamp-red);font-weight:600;}
+
+  /* ============ NOTES / APPENDIX ============ */
+  .appendix{
+    background:var(--ink);
+    color:#C9C4B4;
+    padding:48px 44px 64px;
+  }
+  .appendix-inner{max-width:calc(var(--max-w) + 220px);margin:0 auto;padding-left:210px;}
+  .appendix h2{
+    color:var(--paper);
+    font-size:1.15rem;
+    margin-bottom:18px;
+  }
+  .appendix p, .appendix li{color:#B7B2A3;font-size:14.5px;}
+  .appendix li::before{color:var(--stamp-red);}
+  .appendix ul{margin:0;}
+
+  footer{
+    text-align:center;
+    padding:30px 24px 50px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--kraft-dark);
+    background:var(--paper);
+  }
+
+  @media (max-width: 780px){
+    main.body-wrap{grid-template-columns:1fr;}
+    nav.tabs{
+      position:relative;
+      border-right:none;
+      border-bottom:1px solid var(--line);
+      padding:28px 24px;
+      display:flex;
+      flex-wrap:wrap;
+      gap:4px 10px;
+    }
+    nav.tabs .tabs-label{width:100%;}
+    nav.tabs a{padding:6px 10px;border-left:none;border-bottom:2px solid transparent;}
+    nav.tabs a:hover{border-left:none;border-bottom-color:var(--stamp-red);}
+    article{padding:36px 22px 60px;}
+    .appendix-inner{padding-left:0;}
+    header.jacket{padding:44px 20px 84px;}
+    .title-block{flex-direction:column;}
+    .stamp{transform:rotate(-3deg);}
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto;}
+  }
+
+  @media print{
+    nav.tabs, .stamp, footer{display:none;}
+    main.body-wrap{grid-template-columns:1fr;}
+    header.jacket{background:var(--paper);color:var(--ink);}
+    header.jacket::after{display:none;}
+  }
+</style>
+</head>
+<body>
+
+<header class="jacket">
+  <div class="jacket-inner">
+    <div class="case-meta">
+      <span>Doc Type <b>Privacy Policy</b></span>
+      <span>App <b>The Black Market</b> · com.blackmarket.game</span>
+      <span>Effective <b class="placeholder">7/19/2026</b></span>
+      <span>Rev <b class="placeholder">7/19/2026</b></span>
+    </div>
+    <div class="title-block">
+      <h1 class="doc-title"><span class="app-name">Case File — Player Data</span>Privacy Policy</h1>
+      <div class="stamp">On File</div>
+    </div>
+    <p class="subline">A plain account of what The Black Market collects, why, and who else touches it. Compiled from a direct review of the app package — not a boilerplate template.</p>
+  </div>
+</header>
+
+<main class="body-wrap">
+  <nav class="tabs" aria-label="Section index">
+    <div class="tabs-label">Contents</div>
+    <a href="#s1"><b>01</b>Info We Collect</a>
+    <a href="#s2"><b>02</b>How We Use It</a>
+    <a href="#s3"><b>03</b>Third Parties</a>
+    <a href="#s4"><b>04</b>In-App Purchases</a>
+    <a href="#s5"><b>05</b>Storage &amp; Security</a>
+    <a href="#s6"><b>06</b>Retention</a>
+    <a href="#s7"><b>07</b>Children's Privacy</a>
+    <a href="#s8"><b>08</b>Your Rights</a>
+    <a href="#s9"><b>09</b>Data Sharing</a>
+    <a href="#s10"><b>10</b>Changes</a>
+    <a href="#s11"><b>11</b>Contact</a>
+  </nav>
+
+  <article>
+
+    <section id="s1">
+      <span class="sec-num">01 / Information We Collect</span>
+      <h2>What lands in the file</h2>
+
+      <h3>Account Information</h3>
+      <p>When you create an account, we collect:</p>
+      <ul>
+        <li>Email address</li>
+        <li>Password — stored in encrypted/hashed form by our backend provider; we never see or store it in plain text</li>
+        <li>Username / display name</li>
+      </ul>
+
+      <h3>Gameplay Data</h3>
+      <p>To run the core game, we store:</p>
+      <ul>
+        <li>In-game score and progress</li>
+        <li>In-game currency balance ("coins")</li>
+        <li>Purchase history related to in-game items (see Section 04)</li>
+      </ul>
+
+      <h3>Automatically Collected</h3>
+      <p>Our backend provider may log limited technical details automatically — IP address, device type, and activity timestamps — strictly for security and reliability purposes.</p>
+
+      <h3>What We Don't Touch</h3>
+      <div class="no-collect"><span class="x">✕</span> Camera</div>
+      <div class="no-collect"><span class="x">✕</span> Precise or approximate location</div>
+      <div class="no-collect"><span class="x">✕</span> Contacts</div>
+      <div class="no-collect"><span class="x">✕</span> Photos &amp; microphone</div>
+      <p style="margin-top:14px;">The app requests no permissions beyond internet access.</p>
+    </section>
+
+    <hr class="redact-rule">
+
+    <section id="s2">
+      <span class="sec-num">02 / How We Use Your Information</span>
+      <h2>Why we keep it on file</h2>
+      <p>We use the information above to:</p>
+      <ul>
+        <li>Create and maintain your account</li>
+        <li>Save and sync your progress, score, and in-game currency across sessions</li>
+        <li>Process in-app purchases</li>
+        <li>Maintain the security and integrity of the app</li>
+        <li>Respond to support requests</li>
+        <li>Improve and troubleshoot the app</li>
+      </ul>
+      <div class="callout">
+        <span class="callout-label">Standing policy</span>
+        <p>We do not sell your personal information. Full stop.</p>
+      </div>
+    </section>
+
+    <hr class="redact-rule">
+
+    <section id="s3">
+      <span class="sec-num">03 / Third-Party Service Providers</span>
+      <h2>Who else has access</h2>
+      <p><strong>Supabase</strong> — backend infrastructure, authentication, and database hosting. Supabase processes and stores your account and gameplay data on our behalf, under its own security and data-processing practices.</p>
+      <p class="placeholder" style="display:inline-block; white-space:normal;">[IF APPLICABLE: Google Play Billing handles payment processing for in-app purchases — we do not receive or store your card details.]</p>
+      <p style="margin-top:16px;">We'll update this section if we add or change providers.</p>
+    </section>
+
+    <hr class="redact-rule">
+
+    <section id="s4">
+      <span class="sec-num">04 / In-App Purchases</span>
+      <h2>Coins &amp; transactions</h2>
+      <p>If the app offers in-game currency or item purchases, those transactions run through the app store platform (e.g., Google Play). We receive confirmation of the purchase and update your in-game balance — we never collect or store your payment card or billing details ourselves.</p>
+    </section>
+
+    <hr class="redact-rule">
+
+    <section id="s5">
+      <span class="sec-num">05 / Data Storage and Security</span>
+      <h2>How the file is kept</h2>
+      <p>Your information lives on secure servers operated by our backend provider. We take reasonable technical and organizational measures to protect it from unauthorized access, loss, or misuse. No method of electronic storage or transmission is 100% secure, and we can't guarantee absolute security.</p>
+    </section>
+
+    <hr class="redact-rule">
+
+    <section id="s6">
+      <span class="sec-num">06 / Data Retention</span>
+      <h2>How long the file stays open</h2>
+      <p>We retain your account and gameplay information for as long as your account stays active, or as needed to provide the app's services. You can request deletion of your account and associated data at any time — see Section 11.</p>
+    </section>
+
+    <hr class="redact-rule">
+
+    <section id="s7">
+      <span class="sec-num">07 / Children's Privacy</span>
+      <h2>Age restrictions</h2>
+      <p>The app is not directed to children under 13 (or the relevant minimum age in your jurisdiction), and we do not knowingly collect personal information from children under that age. If you believe a child has given us personal information, contact us so we can remove it.</p>
+    </section>
+
+    <hr class="redact-rule">
+
+    <section id="s8">
+      <span class="sec-num">08 / Your Rights and Choices</span>
+      <h2>What you can request</h2>
+      <p>Depending on your location, you may have the right to:</p>
+      <ul>
+        <li>Access the personal information we hold about you</li>
+        <li>Correct inaccurate information</li>
+        <li>Request deletion of your account and data</li>
+        <li>Withdraw consent to processing, where applicable</li>
+      </ul>
+      <p>To exercise any of these, reach us using the details in Section 11.</p>
+    </section>
+
+    <hr class="redact-rule">
+
+    <section id="s9">
+      <span class="sec-num">09 / Data Sharing and Disclosure</span>
+      <h2>Where the file travels</h2>
+      <p>We do not sell or rent your personal information. We may share it:</p>
+      <ul>
+        <li>With service providers who help us run the app (e.g., Supabase), under confidentiality obligations</li>
+        <li>If required by law, legal process, or government request</li>
+        <li>To protect the rights, property, or safety of our users or the public</li>
+        <li>In connection with a merger, acquisition, or sale of business assets</li>
+      </ul>
+    </section>
+
+    <hr class="redact-rule">
+
+    <section id="s10">
+      <span class="sec-num">10 / Changes to This Policy</span>
+      <h2>Reopening the file</h2>
+      <p>We may update this policy from time to time. Material changes will be reflected by updating the "Rev" date at the top of this document, and where appropriate, we'll give additional notice inside the app.</p>
+    </section>
+
+    <hr class="redact-rule">
+
+    <section id="s11">
+      <span class="sec-num">11 / Contact Us</span>
+      <h2>Reach the desk</h2>
+      <p>Questions about this policy, or want to exercise your data rights? Contact:</p>
+      <ul>
+        <li>Email: <span class="placeholder">info@tourarcade.xyz</span></li>
+        <li>Developer / Company: <span class="placeholder">Thetour technologies Ltd</span></li>
+        <li>Address (if applicable): <span class="placeholder">35 NBC RD EBUTE IKORODU, LAGOS NIGERIA.</span></li>
+      </ul>
+    </section>
+
+  </article>
+</main>
+
+<!-- <div class="appendix">
+  <div class="appendix-inner">
+    <h2>Notes Before You Publish</h2>
+    <ul>
+      <li>Fill in every highlighted placeholder — company name, contact email, effective date, and a mailing address if your app store listing requires one.</li>
+      <li>No ad-network or analytics SDK was found in the app package, so none is listed here. If you add ads (e.g. AdMob) or analytics later, add a disclosure section and update this document.</li>
+      <li>The purchase flow (Google Play Billing vs. a custom system) wasn't fully confirmed — check Section 04 and adjust the wording to match reality.</li>
+      <li>This document was drafted from a technical review of your app package, not legal advice. Have a lawyer review it before publishing — especially for EU (GDPR) or California (CCPA) users, which may require extra disclosures.</li>
+    </ul>
+  </div>
+</div> -->
+
+<footer>The Black Market · Privacy Policy</footer>
+
+</body>
+</html>
